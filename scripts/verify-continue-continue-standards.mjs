@@ -18,10 +18,13 @@ const requiredFiles = [
   ".github/workflows/docs-gh-pages.yml",
   ".github/workflows/main.yaml",
   ".github/workflows/jetbrains-release.yaml",
+  "extensions/cli/src/automation/AutomationTypes.ts",
+  "extensions/cli/src/automation/AutomationValidation.ts",
   "extensions/cli/src/automation/AutomationRuntime.ts",
   "extensions/cli/src/automation/AutomationRuntime.test.ts",
   "extensions/cli/src/automation/AutomationTaskStore.ts",
   "extensions/cli/src/automation/AutomationHttpService.ts",
+  "extensions/cli/src/automation/AutomationServeAdapter.ts",
   "extensions/cli/src/commands/serve.ts",
   "extensions/cli/src/commands/serve.helpers.ts",
   "extensions/cli/src/stream/messageQueue.ts",
@@ -75,9 +78,11 @@ for (const path of requiredFiles.filter((p) => p.startsWith(".continue/checks/")
   }
 }
 
+const automationTypes = read("extensions/cli/src/automation/AutomationTypes.ts");
 const automationRuntime = read(
   "extensions/cli/src/automation/AutomationRuntime.ts",
 );
+const automationContract = `${automationTypes}\n${automationRuntime}`;
 for (const phrase of [
   "continue-continue-machine-task",
   "continue-continue-receipt",
@@ -88,10 +93,10 @@ for (const phrase of [
   "toolEvents",
   "acceptanceCriteria",
 ]) {
-  if (!automationRuntime.includes(phrase))
-    failures.push(`automation runtime lost required contract: ${phrase}`);
+  if (!automationContract.includes(phrase))
+    failures.push(`automation contract lost required invariant: ${phrase}`);
 }
-if (automationRuntime.includes('type AutomationDomain = "audio"')) {
+if (automationContract.includes('type AutomationDomain = "audio"')) {
   failures.push("automation domains must remain open-ended routing metadata");
 }
 
@@ -109,13 +114,25 @@ for (const route of [
     failures.push(`automation HTTP service lost route: ${route}`);
 }
 
-const serve = read("extensions/cli/src/commands/serve.ts");
+const serveAdapter = read(
+  "extensions/cli/src/automation/AutomationServeAdapter.ts",
+);
 for (const phrase of [
   "registerAutomationRoutes",
+  "removeAutomationTask",
+  "BUILT_IN_TOOL_NAMES",
+]) {
+  if (!serveAdapter.includes(phrase))
+    failures.push(`serve automation adapter lost integration: ${phrase}`);
+}
+
+const serve = read("extensions/cli/src/commands/serve.ts");
+for (const phrase of [
+  "registerServeAutomationRoutes",
   "AutomationTaskStore",
   "activeAutomationTaskId",
-  "automationTaskId",
-  "applyAgentResponse",
+  "beginAutomationTurn",
+  "completeAutomationTurn",
 ]) {
   if (!serve.includes(phrase))
     failures.push(`cn serve lost automation integration: ${phrase}`);
@@ -127,6 +144,7 @@ for (const lifecycleHook of [
   "markToolResult",
   "markToolError",
   "markPermissionBlocked",
+  "applyAgentResponse",
 ]) {
   if (!serveHelpers.includes(lifecycleHook))
     failures.push(`automation receipt lost lifecycle hook: ${lifecycleHook}`);
