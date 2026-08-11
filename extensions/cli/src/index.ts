@@ -193,6 +193,10 @@ addCommonOptions(program)
   .option("--resume", "Resume from last session")
   .option("--fork <sessionId>", "Fork from an existing session ID")
   .option(
+    "--session-id <sessionId>",
+    "Use an exact persistent session ID in -p/--print mode (parallel-safe alternative to --resume)",
+  )
+  .option(
     "--beta-subagent-tool",
     "Enable beta Subagent tool for invoking subagents",
   )
@@ -209,7 +213,7 @@ addCommonOptions(program)
           // Combine stdin and prompt argument
           prompt = `${stdinInput}\n\n${prompt}`;
         } else {
-          // Only stdin input, use as initial prompt
+          // Only stdin input, use as the initial prompt
           prompt = stdinInput;
         }
 
@@ -234,6 +238,7 @@ addCommonOptions(program)
       config: options.config,
       resume: options.resume,
       fork: options.fork,
+      sessionId: options.sessionId,
       allow: options.allow,
       ask: options.ask,
       exclude: options.exclude,
@@ -243,6 +248,15 @@ addCommonOptions(program)
 
     if (!validation.isValid) {
       handleValidationErrors(validation.errors);
+    }
+
+    if (options.sessionId) {
+      // Exact session identity is implemented centrally in session.ts. We set
+      // resume only to ask chat initialization to load history; loadSession()
+      // will honor this exact ID instead of global-most-recent and will create
+      // the requested durable lineage when it does not yet exist.
+      process.env.CONTINUE_CLI_SESSION_ID = String(options.sessionId).trim();
+      options.resume = true;
     }
 
     if (options.verbose) {
@@ -275,10 +289,10 @@ addCommonOptions(program)
     }
 
     // In headless mode, ensure we have a prompt unless using --agent flag or --resume flag
-    // Agent files can provide their own prompts, and resume can work without new input
+    // Agent files can provide their own prompts, and resume/exact-session can work without new input.
     if (options.print && !prompt && !options.agent && !options.resume) {
       safeStderr(
-        "Error: A prompt is required when using the -p/--print flag, unless --prompt, --agent, or --resume is provided.\n\n",
+        "Error: A prompt is required when using the -p/--print flag, unless --prompt, --agent, --resume, or --session-id is provided.\n\n",
       );
       safeStderr("Usage examples:\n");
       safeStderr('  cn -p "please review my current git diff"\n');
@@ -287,6 +301,7 @@ addCommonOptions(program)
       safeStderr("  cn -p --agent my-org/my-agent\n");
       safeStderr("  cn -p --prompt my-org/my-prompt\n");
       safeStderr("  cn -p --resume\n");
+      safeStderr('  cn -p --session-id vlad-worker-1 "continue the task"\n');
       await gracefulExit(1);
     }
 
