@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import pathlib
@@ -18,6 +19,21 @@ from typing import Mapping
 SCHEMA = "continue-continue.vlad-doctor.v1"
 DEFAULT_PHONE_ASK = "/data/data/com.termux/files/usr/local/bin/home-center-phone-ask"
 DEFAULT_EDGE_BIN = "/data/data/com.termux/files/usr/local/bin/continue-continue-vlad"
+DEFAULT_INTERNAL_EDGE_BIN = "/data/data/com.termux/files/usr/local/bin/continue-continue-vlad-edge"
+DEFAULT_ROUTING_SHEET = "/data/data/com.termux/files/usr/etc/continue-continue/routes.csv"
+ROUTING_COLUMNS = {
+    "priority",
+    "enabled",
+    "name",
+    "domain",
+    "contains_any",
+    "contains_all",
+    "route",
+    "target_domain",
+    "command",
+    "phone_prompt",
+    "reason",
+}
 KNOWN_REQUIREMENTS = {"phone_hands", "upstream", "qwen"}
 
 
@@ -58,6 +74,30 @@ def _executable(path: str) -> bool:
     return target.is_file() and os.access(target, os.X_OK)
 
 
+def _routing_sheet(path: str) -> tuple[bool, str]:
+    target = pathlib.Path(path)
+    if not target.is_file():
+        return False, f"missing: {target}"
+    try:
+        with target.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            fields = set(reader.fieldnames or [])
+            missing = sorted(ROUTING_COLUMNS - fields)
+            if missing:
+                return False, "missing columns: " + ",".join(missing)
+            rows = list(reader)
+    except (OSError, csv.Error) as exc:
+        return False, f"unreadable: {exc}"
+    enabled_rows = sum(
+        1
+        for row in rows
+        if str(row.get("enabled") or "").strip().lower() in {"1", "true", "yes", "on"}
+    )
+    if not enabled_rows:
+        return False, "routing sheet has no enabled rows"
+    return True, f"{target} ({enabled_rows} enabled rows)"
+
+
 def _parse_requirements(values: list[str], env: Mapping[str, str]) -> set[str]:
     required = set(values)
     required.update(filter(None, env.get("VLAD_DOCTOR_REQUIRE", "").split(",")))
@@ -95,14 +135,16 @@ def diagnose(
     checks.append(Check("state_dir", writable, True, detail))
 
     edge_bin = env.get("VLAD_EDGE_BIN", DEFAULT_EDGE_BIN)
+    checks.append(Check("edge_binary", _executable(edge_bin), True, edge_bin))
+
+    internal_edge = env.get("VLAD_EDGE_INTERNAL", DEFAULT_INTERNAL_EDGE_BIN)
     checks.append(
-        Check(
-            "edge_binary",
-            _executable(edge_bin),
-            True,
-            edge_bin,
-        )
+        Check("internal_edge_binary", _executable(internal_edge), True, internal_edge)
     )
+
+    sheet = env.get("VLAD_ROUTING_SHEET", DEFAULT_ROUTING_SHEET)
+    sheet_ok, sheet_detail = _routing_sheet(sheet)
+    checks.append(Check("routing_sheet", sheet_ok, True, sheet_detail))
 
     phone_required = "phone_hands" in requirements
     phone_bin = env.get("PHONE_ASK_BIN", DEFAULT_PHONE_ASK)
@@ -121,9 +163,14 @@ def diagnose(
     upstream_required = "upstream" in requirements
     upstream = env.get("CONTINUE_CONTINUE_UPSTREAM_URL", "").rstrip("/")
     if upstream:
-        upstream_ok, upstream_detail = _probe_http(upstream + "/automation/capabilities")
+        upstream_ok, upstream_detail = _probe_http(
+            upstream + "/automation/capabilities"
+        )
     else:
-        upstream_ok, upstream_detail = False, "CONTINUE_CONTINUE_UPSTREAM_URL is not configured"
+        upstream_ok, upstream_detail = (
+            False,
+            "CONTINUE_CONTINUE_UPSTREAM_URL is not configured",
+        )
     checks.append(Check("upstream", upstream_ok, upstream_required, upstream_detail))
 
     qwen_required = "qwen" in requirements
@@ -138,8 +185,12 @@ def diagnose(
         path = shutil.which(binary, path=env.get("PATH"))
         checks.append(Check(f"tool:{binary}", bool(path), False, path or "not found"))
 
-    required_failures = [check.name for check in checks if check.required and not check.ok]
-    optional_failures = [check.name for check in checks if not check.required and not check.ok]
+    required_failures = [
+        check.name for check in checks if check.required and not check.ok
+    ]
+    optional_failures = [
+        check.name for check in checks if not check.required and not check.ok
+    ]
     return {
         "schema": SCHEMA,
         "ready": not required_failures,
