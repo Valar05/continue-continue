@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Read-only readiness probe for the Continue Continue Vlad Termux edge."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import pathlib
+import shutil
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+from dataclasses import asdict, dataclass
+from typing import Mapping
+
+SCHEMA = "continue-continue.vlad-doctor.v1"
+DEFAULT_PHONE_ASK = "/data/data/com.termux/files/usr/local/bin/home-center-phone-ask"
+DEFAULT_EDGE_BIN = "/data/data/com.termux/files/usr/local/bin/continue-continue-vlad"
+KNOWN_REQUIREMENTS = {"phone_hands", "upstream", "qwen"}
+
+
+@dataclass(frozen=True)
+class Check:
+    name: str
+    ok: bool
+    required: bool
+    detail: str
+
+
+def _enabled(env: Mapping[str, str], name: str) -> bool:
+    return env.get(name, "0") == "1"
+
+
+def _probe_http(url: str, timeout: float = 2.0) -> tuple[bool, str]:
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            code = int(getattr(response, "status", 200))
+        return 200 <= code < 500, f"HTTP {code}"
+    except (OSError, urllib.error.URLError, ValueError) as exc:
+        return False, f"unreachable: {exc}"
+
+
+def _writable_directory(path: pathlib.Path) -> tuple[bool, str]:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(prefix="doctor-", dir=path, delete=True):
+            pass
+        return True, str(path)
+    except OSError as exc:
+        return False, f"not writable: {exc}"
+
+
+def _executable(path: str) -> bool:
+    target = pathlib.Path(path)
+    return target.is_file() and os.access(target, os.X_OK)
+
+
+def _parse_requirements(values: list[str], env: Mapping[str, str]) -> set[str]:
+    required = set(values)
+    required.update(filter(None, env.get("VLAD_DOCTOR_REQUIRE", "").split(",")))
+    unknown = required - KNOWN_REQUIREMENTS
+    if unknown:
+        raise ValueError("unknown doctor requirement(s): " + ", ".join(sorted(unknown)))
+    return required
+
+
+def diagnose(
+    env: Mapping[str, str] | None = None,
+    requirements: set[str] | None = None,
+) -> dict[str, object]:
+    env = dict(os.environ if env is None else env)
+    requirements = set() if requirements is None else set(requirements)
+    checks: list[Check] = []
+
+    python_ok = sys.version_info >= (3, 10)
+    checks.append(
+        Check(
+            "python",
+            python_ok,
+            True,
+            f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        )
+    )
+
+    state_dir = pathlib.Path(
+        env.get(
+            "CONTINUE_CONTINUE_EDGE_DIR",
+            pathlib.Path.home() / ".continue-continue" / "vlad",
+        )
+    )
+    writable, detail = _writable_directory(state_dir)
+    checks.append(Check("state_dir", writable, True, detail))
+
+    edge_bin = env.get("VLAD_EDGE_BIN", DEFAULT_EDGE_BIN)
+    checks.append(
+        Check(
+            "edge_binary",
+            _executable(edge_bin),
+            True,
+            edge_bin,
+        )
+    )
+
+    phone_required = "phone_hands" in requirements
+    phone_bin = env.get("PHONE_ASK_BIN", DEFAULT_PHONE_ASK)
+    phone_bin_ok = _executable(phone_bin)
+    phone_gate_ok = _enabled(env, "VLAD_ALLOW_PHONE_HANDS")
+    checks.append(Check("phone_hands_binary", phone_bin_ok, phone_required, phone_bin))
+    checks.append(
+        Check(
+            "phone_hands_permission",
+            phone_gate_ok,
+            phone_required,
+            "VLAD_ALLOW_PHONE_HANDS=" + ("1" if phone_gate_ok else "0"),
+        )
+    )
+
+    upstream_required = "upstream" in requirements
+    upstream = env.get("CONTINUE_CONTINUE_UPSTREAM_URL", "").rstrip("/")
+    if upstream:
+        upstream_ok, upstream_detail = _probe_http(upstream + "/automation/capabilities")
+    else:
+        upstream_ok, upstream_detail = False, "CONTINUE_CONTINUE_UPSTREAM_URL is not configured"
+    checks.append(Check("upstream", upstream_ok, upstream_required, upstream_detail))
+
+    qwen_required = "qwen" in requirements
+    qwen = env.get("QWEN_BASE_URL", "").rstrip("/")
+    if qwen:
+        qwen_ok, qwen_detail = _probe_http(qwen + "/models")
+    else:
+        qwen_ok, qwen_detail = False, "QWEN_BASE_URL is not configured"
+    checks.append(Check("qwen", qwen_ok, qwen_required, qwen_detail))
+
+    for binary in ("git", "python3", "ffmpeg", "ffprobe", "rg"):
+        path = shutil.which(binary, path=env.get("PATH"))
+        checks.append(Check(f"tool:{binary}", bool(path), False, path or "not found"))
+
+    required_failures = [check.name for check in checks if check.required and not check.ok]
+    optional_failures = [check.name for check in checks if not check.required and not check.ok]
+    return {
+        "schema": SCHEMA,
+        "ready": not required_failures,
+        "required": sorted(requirements),
+        "requiredFailures": required_failures,
+        "optionalFailures": optional_failures,
+        "checks": [asdict(check) for check in checks],
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Read-only Vlad edge readiness probe")
+    parser.add_argument(
+        "--require",
+        action="append",
+        default=[],
+        choices=sorted(KNOWN_REQUIREMENTS),
+        help="Capability that must be ready; may be repeated.",
+    )
+    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
+    args = parser.parse_args(argv)
+    try:
+        requirements = _parse_requirements(args.require, os.environ)
+    except ValueError as exc:
+        print(json.dumps({"schema": SCHEMA, "ready": False, "error": str(exc)}))
+        return 2
+    report = diagnose(requirements=requirements)
+    print(json.dumps(report, indent=2 if args.pretty else None, sort_keys=True))
+    return 0 if report["ready"] else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
