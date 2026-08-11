@@ -20,9 +20,16 @@ const requiredFiles = [
   ".github/workflows/jetbrains-release.yaml",
   "extensions/cli/src/automation/AutomationRuntime.ts",
   "extensions/cli/src/automation/AutomationRuntime.test.ts",
+  "extensions/cli/src/automation/AutomationTaskStore.ts",
+  "extensions/cli/src/automation/AutomationHttpService.ts",
   "extensions/cli/src/commands/serve.ts",
   "extensions/cli/src/commands/serve.helpers.ts",
+  "extensions/cli/src/stream/messageQueue.ts",
+  "edge/termux/vlad_edge.py",
+  "edge/termux/test_vlad_edge.py",
+  "edge/termux/install.sh",
   "docs/continue-continue/AUTOMATION_LAYER.md",
+  "docs/continue-continue/VLAD_TERMUX_EDGE.md",
   "docs/continue-continue/JUDGMENT_JARS.md",
   "docs/continue-continue/MODERNIZATION.md",
 ];
@@ -73,9 +80,11 @@ const automationRuntime = read(
 );
 for (const phrase of [
   "continue-continue-machine-task",
+  "continue-continue-receipt",
   "automation/orchestration layer",
   "Existing tool permission policy still controls execution",
-  "report BLOCKED",
+  "awaiting_verification",
+  "delegated",
   "toolEvents",
   "acceptanceCriteria",
 ]) {
@@ -86,7 +95,9 @@ if (automationRuntime.includes('type AutomationDomain = "audio"')) {
   failures.push("automation domains must remain open-ended routing metadata");
 }
 
-const serve = read("extensions/cli/src/commands/serve.ts");
+const automationHttp = read(
+  "extensions/cli/src/automation/AutomationHttpService.ts",
+);
 for (const route of [
   'app.post("/automation/tasks"',
   'app.get("/automation/tasks"',
@@ -94,21 +105,50 @@ for (const route of [
   '"/automation/tasks/:taskId/receipt"',
   '"/automation/tasks/:taskId/cancel"',
 ]) {
-  if (!serve.includes(route))
-    failures.push(`cn serve lost automation surface: ${route}`);
+  if (!automationHttp.includes(route))
+    failures.push(`automation HTTP service lost route: ${route}`);
 }
-if (!serve.includes("automationTasks"))
-  failures.push("automation task ledger must ride with long-lived session state");
+
+const serve = read("extensions/cli/src/commands/serve.ts");
+for (const phrase of [
+  "registerAutomationRoutes",
+  "AutomationTaskStore",
+  "activeAutomationTaskId",
+  "automationTaskId",
+  "applyAgentResponse",
+]) {
+  if (!serve.includes(phrase))
+    failures.push(`cn serve lost automation integration: ${phrase}`);
+}
 
 const serveHelpers = read("extensions/cli/src/commands/serve.helpers.ts");
 for (const lifecycleHook of [
   "markToolStart",
   "markToolResult",
   "markToolError",
-  "markBlocked",
+  "markPermissionBlocked",
 ]) {
   if (!serveHelpers.includes(lifecycleHook))
     failures.push(`automation receipt lost lifecycle hook: ${lifecycleHook}`);
+}
+
+const queue = read("extensions/cli/src/stream/messageQueue.ts");
+for (const phrase of ["automationTaskId", "removeAutomationTask"]) {
+  if (!queue.includes(phrase))
+    failures.push(`message queue lost automation identity: ${phrase}`);
+}
+
+const vlad = read("edge/termux/vlad_edge.py");
+for (const phrase of [
+  "VLAD_ALLOW_PHONE_HANDS",
+  "VLAD_ALLOW_LOCAL_EXEC",
+  "CONTINUE_CONTINUE_UPSTREAM_URL",
+  "QWEN_BASE_URL",
+  '"delegated"',
+  '"route": "blocked"',
+]) {
+  if (!vlad.includes(phrase))
+    failures.push(`Vlad edge lost authority/routing contract: ${phrase}`);
 }
 
 const docsPublish = read(".github/workflows/docs-gh-pages.yml");
