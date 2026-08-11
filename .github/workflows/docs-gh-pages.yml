@@ -1,12 +1,8 @@
 name: Deploy Docs to GitHub Pages
 
+# Fork policy: publishing is explicit. Building docs in CI may be automated later,
+# but deploying a public site requires an intentional workflow dispatch.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "docs/**"
-      - "docs-site/**"
-
   workflow_dispatch:
 
 permissions:
