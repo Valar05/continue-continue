@@ -27,7 +27,26 @@ export interface ExtendedSessionMetadata extends BaseSessionMetadata {
 
 // Note: We now use UUID-based session IDs instead of terminal-based IDs.
 // Each new chat session gets a unique UUID.
-// The --resume flag loads the most recent session.
+// The --resume flag loads the most recent session unless an exact session id is
+// explicitly selected through CONTINUE_CLI_SESSION_ID (or the legacy selector
+// variable used by `cn ls`).
+
+const SESSION_ID_PATTERN = /^[A-Za-z0-9_.-]{3,160}$/;
+
+function getExplicitSessionId(): string | undefined {
+  const value = (
+    process.env.CONTINUE_CLI_SESSION_ID ||
+    process.env.CONTINUE_CLI_TEST_SESSION_ID ||
+    ""
+  ).trim();
+  if (!value) return undefined;
+  if (!SESSION_ID_PATTERN.test(value)) {
+    throw new Error(
+      "Explicit Continue session id must be 3-160 safe filename characters (A-Z, a-z, 0-9, _, ., -)",
+    );
+  }
+  return value;
+}
 
 /**
  * Get the session storage directory
@@ -92,10 +111,7 @@ class SessionManager {
 
   getCurrentSession(): Session {
     if (!this.currentSession) {
-      // Use test session ID for testing consistency
-      const sessionId = process.env.CONTINUE_CLI_TEST_SESSION_ID
-        ? process.env.CONTINUE_CLI_TEST_SESSION_ID
-        : uuidv4();
+      const sessionId = getExplicitSessionId() ?? uuidv4();
 
       this.currentSession = {
         sessionId,
@@ -300,7 +316,22 @@ export function saveSession(): void {
  */
 export function loadSession(): Session | null {
   try {
-    // For resume, we need to find the most recent session
+    const explicitSessionId = getExplicitSessionId();
+    if (explicitSessionId) {
+      const explicitSession = loadSessionById(explicitSessionId);
+      if (explicitSession) {
+        SessionManager.getInstance().setSession(explicitSession);
+        return explicitSession;
+      }
+
+      // An explicit id is an authority/identity choice, not a hint to fall back
+      // to whichever unrelated session happens to be newest. Start that exact
+      // durable lineage when it does not yet exist.
+      return createSession([], explicitSessionId);
+    }
+
+    // Legacy --resume behavior: find the most recent session only when no exact
+    // session identity was requested.
     const sessionDir = getSessionDir();
     if (!fs.existsSync(sessionDir)) {
       return null;
