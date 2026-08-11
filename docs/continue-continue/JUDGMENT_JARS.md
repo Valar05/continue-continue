@@ -44,3 +44,31 @@ The work is not complete because code exists, a command succeeded, or an agent s
 ## Precedence
 
 Hard gates outrank scores. Human authority outranks the formula. Evidence can overturn a preferred implementation. It cannot silently rewrite the commission.
+
+
+## Tetsuya — Care or Control?
+
+Question: **Does this automation create shared agency, or make the operator indispensable?**
+
+Use Tetsuya when bootstrap files, skills, manifests, runtimes, mirrors, or generated configuration require repeated classification. The native matrix is inspectable at:
+
+https://docs.google.com/spreadsheets/d/1_MDFmrJmvDEKdF1DvoYGx86J36TtiOCt5S2tvtA_lnU/edit
+
+The deterministic implementation is `scripts/tetsuya-decision-engine.mjs`. It accepts one JSON artifact or a JSON/JSONL batch and emits exactly one of:
+
+- `ASK` — a boundary change requires Drew;
+- `QUARANTINE` — authority, source, conflict, hard-gate, or installed proof failed;
+- `PARK` — an external dependency is blocked;
+- `RETIRE` — the artifact is superseded and has no active consumers;
+- `ROUTE` — the artifact is active, relevant, and verified;
+- `NOOP` — the artifact remains inert.
+
+Precedence is `ASK > QUARANTINE > PARK > RETIRE > ROUTE > NOOP`. Every result includes a deterministic SHA-256 receipt over the normalized artifact, matrix identity, decision, reason, and next action. The same input produces the same receipt.
+
+The script performs no model call, network request, shell execution, file mutation, or authority expansion. Human authority remains outside the formula. The matrix is the inspectable specification; the script is its abacus.
+
+Run the engine tests without provider credentials:
+
+```bash
+node scripts/tetsuya-decision-engine.test.mjs
+```
