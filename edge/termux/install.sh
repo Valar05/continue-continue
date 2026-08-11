@@ -18,7 +18,7 @@ if [ ! -f "$ETC_DIR/routes.csv" ]; then
   install -m 0644 "$SOURCE_DIR/routes.csv" "$ETC_DIR/routes.csv"
 fi
 
-# Stable public entrypoint. Routing sheet is always evaluated before Vlad edge.
+# Stable machine entrypoint. Routing sheet is always evaluated before Vlad edge.
 cat > "$BIN_DIR/continue-continue-vlad" <<EOF
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
@@ -28,8 +28,13 @@ exec "$BIN_DIR/continue-continue-vlad-router" "\$@"
 EOF
 chmod 0755 "$BIN_DIR/continue-continue-vlad"
 
+# First-class human survival surface. It calls the machine entrypoint; it does
+# not replace routing, permissions, receipts, or Continue.
+install -m 0755 "$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/vlad"
+
 cat <<EOF
-Installed public ingress: $BIN_DIR/continue-continue-vlad
+Installed human CLI:      $BIN_DIR/vlad
+Installed machine ingress:$BIN_DIR/continue-continue-vlad
 Installed routing engine: $BIN_DIR/continue-continue-vlad-router
 Installed internal edge:  $BIN_DIR/continue-continue-vlad-edge
 Installed doctor:         $BIN_DIR/continue-continue-vlad-doctor
@@ -44,13 +49,20 @@ Optional explicit organs:
   CONTINUE_CONTINUE_UPSTREAM_URL=<full runtime URL>
   QWEN_BASE_URL=http://127.0.0.1:8091/v1
   QWEN_MODEL=Qwen3-1.7B-Q6_K
+  VLAD_CN_BIN=cn
 
-Preview routing without executing anything:
+Human use:
+  vlad
+  vlad status
+  vlad "Open settings"
+  vlad route "Render a short video"
+  vlad review "Review the current diff"
+
+Coding remains explicitly gated by Vlad edge. To authorize local Continue work,
+VLAD_ALLOW_LOCAL_EXEC must be 1 and cn must remain allowed by VLAD_ALLOWED_BINS.
+
+Machine use:
   printf '%s\n' '{"request":"Open settings"}' | continue-continue-vlad route -
-
-Inspect readiness:
   continue-continue-vlad-doctor --require phone_hands
-
-Serve routed requests:
   continue-continue-vlad serve --host 127.0.0.1 --port 8765
 EOF
