@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import stat
+import sys
 import tempfile
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -10,6 +11,7 @@ MODULE_PATH = pathlib.Path(__file__).with_name("vlad_doctor.py")
 spec = importlib.util.spec_from_file_location("vlad_doctor", MODULE_PATH)
 doctor = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
+sys.modules[spec.name] = doctor
 spec.loader.exec_module(doctor)
 
 
