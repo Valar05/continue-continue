@@ -5,6 +5,7 @@ on:
     paths:
       - "edge/termux/**"
       - "docs/continue-continue/VLAD_TERMUX_EDGE.md"
+      - "docs/continue-continue/VLAD_ROUTING_SHEET.md"
       - "scripts/verify-continue-continue-standards.mjs"
       - ".github/workflows/vlad-edge.yml"
   push:
@@ -12,6 +13,7 @@ on:
     paths:
       - "edge/termux/**"
       - "docs/continue-continue/VLAD_TERMUX_EDGE.md"
+      - "docs/continue-continue/VLAD_ROUTING_SHEET.md"
       - "scripts/verify-continue-continue-standards.mjs"
       - ".github/workflows/vlad-edge.yml"
 
@@ -26,7 +28,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile tiny edge runtime and doctor
-        run: python -m py_compile edge/termux/vlad_edge.py edge/termux/vlad_doctor.py
-      - name: Run Vlad authority, routing, and readiness tests
-        run: python -m unittest edge/termux/test_vlad_edge.py edge/termux/test_vlad_doctor.py
+      - name: Compile tiny edge runtime ingress and doctor
+        run: >-
+          python -m py_compile
+          edge/termux/vlad_edge.py
+          edge/termux/vlad_router.py
+          edge/termux/vlad_doctor.py
+      - name: Run Vlad authority routing ingress and readiness tests
+        run: python -m unittest discover -s edge/termux -p 'test_*.py'
