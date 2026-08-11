@@ -30,9 +30,15 @@ const requiredFiles = [
   "extensions/cli/src/stream/messageQueue.ts",
   "edge/termux/vlad_edge.py",
   "edge/termux/test_vlad_edge.py",
+  "edge/termux/vlad_router.py",
+  "edge/termux/test_vlad_router.py",
+  "edge/termux/vlad_doctor.py",
+  "edge/termux/test_vlad_doctor.py",
+  "edge/termux/routes.csv",
   "edge/termux/install.sh",
   "docs/continue-continue/AUTOMATION_LAYER.md",
   "docs/continue-continue/VLAD_TERMUX_EDGE.md",
+  "docs/continue-continue/VLAD_ROUTING_SHEET.md",
   "docs/continue-continue/JUDGMENT_JARS.md",
   "docs/continue-continue/MODERNIZATION.md",
 ];
@@ -167,6 +173,55 @@ for (const phrase of [
 ]) {
   if (!vlad.includes(phrase))
     failures.push(`Vlad edge lost authority/routing contract: ${phrase}`);
+}
+
+const vladRouter = read("edge/termux/vlad_router.py");
+for (const phrase of [
+  "csv-first-match",
+  "/routing/preview",
+  "VLAD_ROUTING_SHEET",
+  "VLAD_EDGE_INTERNAL",
+  "caller supplied explicit edge action; routing sheet did not override it",
+  '"route": "passthrough"',
+]) {
+  if (!vladRouter.includes(phrase))
+    failures.push(`Vlad ingress router lost invariant: ${phrase}`);
+}
+
+const routingSheet = read("edge/termux/routes.csv");
+if (
+  !routingSheet.startsWith(
+    "priority,enabled,name,domain,contains_any,contains_all,route,target_domain,command,phone_prompt,reason",
+  )
+) {
+  failures.push("Vlad routing sheet lost its spreadsheet contract header");
+}
+for (const rule of ["deny-destructive-phone", "android-ui", "audio-work", "video-work"]) {
+  if (!routingSheet.includes(rule))
+    failures.push(`Vlad routing sheet lost foundational rule: ${rule}`);
+}
+
+const vladInstaller = read("edge/termux/install.sh");
+for (const phrase of [
+  "continue-continue-vlad-router",
+  "continue-continue-vlad-edge",
+  "routes.csv",
+  "if [ ! -f",
+  "Stable public entrypoint",
+]) {
+  if (!vladInstaller.includes(phrase))
+    failures.push(`Vlad installer lost routed-ingress invariant: ${phrase}`);
+}
+
+const vladDoctor = read("edge/termux/vlad_doctor.py");
+for (const phrase of [
+  "routing_sheet",
+  "DEFAULT_ROUTING_SHEET",
+  "internal_edge_binary",
+  "routing sheet has no enabled rows",
+]) {
+  if (!vladDoctor.includes(phrase))
+    failures.push(`Vlad doctor lost routing readiness invariant: ${phrase}`);
 }
 
 const docsPublish = read(".github/workflows/docs-gh-pages.yml");
