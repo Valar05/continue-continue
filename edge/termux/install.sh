@@ -8,8 +8,8 @@ SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "$BIN_DIR" "$ETC_DIR"
 
-# Public entrypoint: dumb routing sheet first, Vlad edge second.
-install -m 0755 "$SOURCE_DIR/vlad_router.py" "$BIN_DIR/continue-continue-vlad"
+# Internal organs.
+install -m 0755 "$SOURCE_DIR/vlad_router.py" "$BIN_DIR/continue-continue-vlad-router"
 install -m 0755 "$SOURCE_DIR/vlad_edge.py" "$BIN_DIR/continue-continue-vlad-edge"
 install -m 0755 "$SOURCE_DIR/vlad_doctor.py" "$BIN_DIR/continue-continue-vlad-doctor"
 
@@ -18,15 +18,22 @@ if [ ! -f "$ETC_DIR/routes.csv" ]; then
   install -m 0644 "$SOURCE_DIR/routes.csv" "$ETC_DIR/routes.csv"
 fi
 
+# Stable public entrypoint. Routing sheet is always evaluated before Vlad edge.
+cat > "$BIN_DIR/continue-continue-vlad" <<EOF
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+export VLAD_ROUTING_SHEET="\${VLAD_ROUTING_SHEET:-$ETC_DIR/routes.csv}"
+export VLAD_EDGE_INTERNAL="\${VLAD_EDGE_INTERNAL:-$BIN_DIR/continue-continue-vlad-edge}"
+exec "$BIN_DIR/continue-continue-vlad-router" "\$@"
+EOF
+chmod 0755 "$BIN_DIR/continue-continue-vlad"
+
 cat <<EOF
 Installed public ingress: $BIN_DIR/continue-continue-vlad
+Installed routing engine: $BIN_DIR/continue-continue-vlad-router
 Installed internal edge:  $BIN_DIR/continue-continue-vlad-edge
 Installed doctor:         $BIN_DIR/continue-continue-vlad-doctor
 Routing sheet:            $ETC_DIR/routes.csv
-
-Set once in your Termux environment:
-  VLAD_ROUTING_SHEET=$ETC_DIR/routes.csv
-  VLAD_EDGE_INTERNAL=$BIN_DIR/continue-continue-vlad-edge
 
 Safe defaults remain OFF:
   VLAD_ALLOW_PHONE_HANDS=0
@@ -38,17 +45,12 @@ Optional explicit organs:
   QWEN_BASE_URL=http://127.0.0.1:8091/v1
   QWEN_MODEL=Qwen3-1.7B-Q6_K
 
-Try without executing anything:
-  printf '%s\n' '{"request":"Open settings"}' | \
-    VLAD_ROUTING_SHEET="$ETC_DIR/routes.csv" \
-    VLAD_EDGE_INTERNAL="$BIN_DIR/continue-continue-vlad-edge" \
-    continue-continue-vlad route -
+Preview routing without executing anything:
+  printf '%s\n' '{"request":"Open settings"}' | continue-continue-vlad route -
 
-Then inspect readiness:
+Inspect readiness:
   continue-continue-vlad-doctor --require phone_hands
 
 Serve routed requests:
-  VLAD_ROUTING_SHEET="$ETC_DIR/routes.csv" \
-  VLAD_EDGE_INTERNAL="$BIN_DIR/continue-continue-vlad-edge" \
   continue-continue-vlad serve --host 127.0.0.1 --port 8765
 EOF
