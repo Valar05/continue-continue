@@ -34,11 +34,14 @@ const requiredFiles = [
   "edge/termux/test_vlad_router.py",
   "edge/termux/vlad_doctor.py",
   "edge/termux/test_vlad_doctor.py",
+  "edge/termux/vlad_cli.py",
+  "edge/termux/test_vlad_cli.py",
   "edge/termux/routes.csv",
   "edge/termux/install.sh",
   "docs/continue-continue/AUTOMATION_LAYER.md",
   "docs/continue-continue/VLAD_TERMUX_EDGE.md",
   "docs/continue-continue/VLAD_ROUTING_SHEET.md",
+  "docs/continue-continue/VLAD_CLI.md",
   "docs/continue-continue/JUDGMENT_JARS.md",
   "docs/continue-continue/MODERNIZATION.md",
 ];
@@ -201,16 +204,32 @@ for (const rule of ["deny-destructive-phone", "android-ui", "audio-work", "video
     failures.push(`Vlad routing sheet lost foundational rule: ${rule}`);
 }
 
+const vladCli = read("edge/termux/vlad_cli.py");
+for (const phrase of [
+  "continue-continue.vlad-cli.v1",
+  "explicit_phone_task",
+  "continue_task",
+  '"cn", "-p"',
+  '"--readonly"',
+  '"--auto"',
+  "Vlad edge gate still applies",
+]) {
+  if (!vladCli.includes(phrase))
+    failures.push(`Vlad human CLI lost survival/authority invariant: ${phrase}`);
+}
+
 const vladInstaller = read("edge/termux/install.sh");
 for (const phrase of [
   "continue-continue-vlad-router",
   "continue-continue-vlad-edge",
   "routes.csv",
   "if [ ! -f",
-  "Stable public entrypoint",
+  "Stable machine entrypoint",
+  "First-class human survival surface",
+  '"$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/vlad"',
 ]) {
   if (!vladInstaller.includes(phrase))
-    failures.push(`Vlad installer lost routed-ingress invariant: ${phrase}`);
+    failures.push(`Vlad installer lost routed/human ingress invariant: ${phrase}`);
 }
 
 const vladDoctor = read("edge/termux/vlad_doctor.py");
