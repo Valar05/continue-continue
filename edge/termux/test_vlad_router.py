@@ -99,6 +99,20 @@ class VladRouterTests(unittest.TestCase):
         self.assertEqual(decision["route"], "passthrough")
         self.assertNotIn("edge", task["context"])
 
+    def test_shipped_sheet_routes_foundational_examples(self):
+        shipped = ROOT / "routes.csv"
+        cases = [
+            ("Open settings", "phone_hands", "system"),
+            ("Render a short video", "delegate", "video"),
+            ("Make a voice clip", "delegate", "audio"),
+            ("Factory reset the phone", "blocked", "system"),
+        ]
+        for request, expected_route, expected_domain in cases:
+            with self.subTest(request=request):
+                task, decision = router.apply_sheet({"request": request}, shipped)
+                self.assertEqual(decision["route"], expected_route)
+                self.assertEqual(task["domain"], expected_domain)
+
 
 if __name__ == "__main__":
     unittest.main()
