@@ -19,23 +19,55 @@ for (const phrase of [
   "VLAD_ALLOW_LOCAL_EXEC",
   "VLAD_ALLOW_PHONE_HANDS",
 ]) {
-  if (!edge.includes(phrase)) failures.push(`Vlad edge lost survival authority invariant: ${phrase}`);
+  if (!edge.includes(phrase))
+    failures.push(`Vlad edge lost survival authority invariant: ${phrase}`);
 }
 
 const cli = read("edge/termux/vlad_cli.py");
 for (const phrase of [
   "continue-continue.vlad-cli.v1",
   "DOCTOR_REQUIREMENTS",
+  "SESSION_ID_PATTERN",
+  "new_continue_session_id",
   '"allowedBins"',
   "narrows shell authority",
   '"--readonly"',
   '"--auto"',
-  '"--resume"',
-  "continue_session_started",
+  '"--session-id"',
+  "continueSessionId",
+  'text == "/session"',
   'text == "/new"',
+  "Independent verification is still required",
+  "not that unverified code is accepted",
 ]) {
-  if (!cli.includes(phrase)) failures.push(`Vlad CLI lost survival/continuity invariant: ${phrase}`);
+  if (!cli.includes(phrase))
+    failures.push(`Vlad CLI lost survival/continuity invariant: ${phrase}`);
 }
+
+const continueIndex = read("extensions/cli/src/index.ts");
+for (const phrase of [
+  '"--session-id <sessionId>"',
+  "CONTINUE_CLI_SESSION_ID",
+  "parallel-safe alternative to --resume",
+]) {
+  if (!continueIndex.includes(phrase))
+    failures.push(`Continue CLI lost exact-session surface: ${phrase}`);
+}
+
+const continueSession = read("extensions/cli/src/session.ts");
+for (const phrase of [
+  "getExplicitSessionId",
+  "CONTINUE_CLI_SESSION_ID",
+  "CONTINUE_CLI_TEST_SESSION_ID",
+  "SESSION_ID_PATTERN",
+  "loadSessionById(explicitSessionId)",
+  "createSession([], explicitSessionId)",
+  "Legacy --resume behavior",
+]) {
+  if (!continueSession.includes(phrase))
+    failures.push(`Continue session core lost exact-session invariant: ${phrase}`);
+}
+read("extensions/cli/src/session.explicitId.test.ts");
 
 const doctor = read("edge/termux/vlad_doctor.py");
 for (const phrase of [
@@ -46,7 +78,8 @@ for (const phrase of [
   "VLAD_CN_BIN",
   "VLAD_ALLOWED_BINS",
 ]) {
-  if (!doctor.includes(phrase)) failures.push(`Vlad doctor lost Continue readiness invariant: ${phrase}`);
+  if (!doctor.includes(phrase))
+    failures.push(`Vlad doctor lost Continue readiness invariant: ${phrase}`);
 }
 
 const installer = read("edge/termux/install.sh");
@@ -55,22 +88,26 @@ for (const phrase of [
   "First-class human survival surface",
   '"$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/vlad"',
 ]) {
-  if (!installer.includes(phrase)) failures.push(`Vlad installer lost two-door invariant: ${phrase}`);
+  if (!installer.includes(phrase))
+    failures.push(`Vlad installer lost two-door invariant: ${phrase}`);
 }
 
 const docs = read("docs/continue-continue/VLAD_CLI.md");
 for (const phrase of [
   "vlad doctor --require continue",
   "Per-task authority can only narrow global shell authority",
-  "Later `/code` and `/review` turns automatically add `--resume`",
   "no ChatGPT",
   "no Continue",
 ]) {
-  if (!docs.includes(phrase)) failures.push(`Vlad survival documentation lost invariant: ${phrase}`);
+  if (!docs.includes(phrase))
+    failures.push(`Vlad survival documentation lost invariant: ${phrase}`);
 }
 
 if (failures.length) {
-  console.error("Vlad survival verification failed:\n" + failures.map((x) => `- ${x}`).join("\n"));
+  console.error(
+    "Vlad survival verification failed:\n" +
+      failures.map((x) => `- ${x}`).join("\n"),
+  );
   process.exit(1);
 }
 
