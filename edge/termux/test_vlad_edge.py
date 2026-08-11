@@ -56,7 +56,7 @@ class VladEdgeTests(unittest.TestCase):
         )
         result = vlad.execute(record)
         self.assertEqual(result["status"], "blocked")
-        self.assertIn("VLAD_ALLOW_PHONE_HANDS=0", result["evidence"])
+        self.assertIn("gate:VLAD_ALLOW_PHONE_HANDS=0", result["evidence"])
 
     def test_shell_intent_does_not_grant_permission(self):
         record = vlad.create_record(
@@ -67,7 +67,7 @@ class VladEdgeTests(unittest.TestCase):
         )
         result = vlad.execute(record)
         self.assertEqual(result["status"], "blocked")
-        self.assertIn("VLAD_ALLOW_LOCAL_EXEC=0", result["evidence"])
+        self.assertIn("gate:VLAD_ALLOW_LOCAL_EXEC=0", result["evidence"])
 
     def test_delegation_preserves_task_id_and_is_not_completion(self):
         response = {"queued": True, "task": {"taskId": "vlad-delegate-001"}}
