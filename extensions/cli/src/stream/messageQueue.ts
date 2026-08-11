@@ -8,6 +8,7 @@ export interface QueuedMessage {
   imageMap?: Map<string, Buffer>;
   timestamp: number;
   history?: InputHistory;
+  automationTaskId?: string;
 }
 
 export interface MessageProcessor {
@@ -15,7 +16,9 @@ export interface MessageProcessor {
 }
 
 /**
- * A queue to store messages that need to be processed later
+ * A queue to store messages that need to be processed later.
+ * Automation task identity is metadata, not text parsing state, so queued work
+ * can be cancelled without disturbing ordinary chat messages.
  */
 class MessageQueue extends EventEmitter {
   private queue: QueuedMessage[] = [];
@@ -28,30 +31,34 @@ class MessageQueue extends EventEmitter {
     message: string,
     imageMap?: Map<string, Buffer>,
     history?: InputHistory,
+    automationTaskId?: string,
   ): Promise<boolean> {
     const queuedMessage: QueuedMessage = {
       message,
       imageMap,
       timestamp: Date.now(),
       history,
+      automationTaskId,
     };
 
     this.queue.push(queuedMessage);
     logger.debug("MessageQueue: Message queued", {
       queueLength: this.queue.length,
+      automationTaskId,
     });
 
-    // Emit event for UI to show the queued message
     this.emit("messageQueued", queuedMessage);
-
     return true;
   }
 
-  /**
-   * Dequeues and returns the next message to be processed (FIFO - oldest first)
-   */
   public getNextMessage(): QueuedMessage | undefined {
     return this.queue.shift();
+  }
+
+  removeAutomationTask(taskId: string): number {
+    const before = this.queue.length;
+    this.queue = this.queue.filter((item) => item.automationTaskId !== taskId);
+    return before - this.queue.length;
   }
 
   getQueueLength(): number {
