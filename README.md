@@ -1,63 +1,58 @@
-<h1 align="center">Continue</h1>
+<h1 align="center">Continue Continue</h1>
 
-<p align="center">Pioneering open-source coding agent</p>
+<p align="center">A maintained, local-first continuation of the open-source Continue coding agent.</p>
 
-<div align="center">
+## Why this fork exists
 
-<a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" /></a>
-<a href="https://docs.continue.dev"><img src="https://img.shields.io/badge/Docs-docs.continue.dev-blue" /></a>
-<a href="https://github.com/continuedev/continue/releases"><img src="https://img.shields.io/badge/Changelog-GitHub_Releases-blue" /></a>
+`continuedev/continue` ended its actively maintained coding-agent line with the 2.0.0-era codebase and explicitly invited others to use it as a foundation. Continue Continue takes that foundation seriously: keep the useful CLI, VS Code, and JetBrains architecture, then harden the agent around explicit authority, local-first operation, recoverability, and evidence-backed completion.
 
-</div>
+This is a real GitHub fork. Upstream remains `continuedev/continue`; the initial modernization baseline is commit `5522c6f44ca0ac3528b37244818fbfa39b5af470`.
 
-<p align="center">
-  <img src="media/github-readme.png" alt="Banner" />
-</p>
+## Current divergence
 
-## What is Continue?
+The first Continue Continue hardening layer does four things:
 
-> _Note: The `continuedev/continue` repository is no longer actively maintained and is read-only for all users._
+- makes the generated assistant starter **local-first** with Ollama rather than teaching cloud API keys by default;
+- installs a root agent constitution that Continue already knows how to load as an always-on workspace rule;
+- adds Continue-native rules/checks for mission boundaries, evidence receipts, local-first behavior, and Ravenholm process sanity;
+- adds a zero-provider-cost CI check that prevents those guarantees from quietly disappearing.
 
-Continue is a coding agent available as a [CLI](#cli), [VS Code extension](#vs-code), and [JetBrains plugin](#jetbrains).
+See [`docs/continue-continue/MODERNIZATION.md`](docs/continue-continue/MODERNIZATION.md) for the phased engineering ledger and [`docs/continue-continue/JUDGMENT_JARS.md`](docs/continue-continue/JUDGMENT_JARS.md) for the decision operators.
 
-## Documentation
+## Operating law
 
-To learn how to configure Continue, how it works, and how to customize it, check out the [Continue Docs](https://docs.continue.dev).
+A coding agent may improve the means aggressively. It may not silently change the commissioned outcome, owner, execution lane, exclusions, evidence standard, or delivery surface.
 
-## Final 2.0.0 Release
+Two failures are hard gates:
 
-We polished Continue and did a final 2.0.0 release of the VS Code extension, CLI, and JetBrains plugin.
+- **Beautiful substitution:** a polished adjacent solution hides a changed mission.
+- **Receiptless victory:** a confident completion claim outruns the artifact or read-back evidence.
 
-This included removing anonymous telemetry, pulling out authentication, squashing bugs, and more.
+Local models are the baseline. Remote providers remain supported integrations, but they are opt-in capability rather than the price of admission.
 
-### VS Code
+## Components inherited from Continue
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS_Code_Marketplace-007ACC?logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=Continue.continue) [![OpenVSX Registry](https://img.shields.io/badge/OpenVSX_Registry-C160EF?logo=eclipseide&logoColor=white)](https://open-vsx.org/extension/Continue/continue) [![View source](https://img.shields.io/badge/View_source-181717?logo=github&logoColor=white)](extensions/vscode)
+- CLI
+- VS Code extension
+- JetBrains plugin
+- model/provider abstraction
+- workspace rules and agent files
+- Continue checks
 
-### CLI
+The inherited code is capability, not automatic acceptance. Each path is being audited and promoted under this fork's standards.
 
-[![npm](https://img.shields.io/badge/npm-CB3837?logo=npm&logoColor=white)](https://www.npmjs.com/package/@continuedev/cli) [![View source](https://img.shields.io/badge/View_source-181717?logo=github&logoColor=white)](extensions/cli)
+## Development
 
-### JetBrains
+Run the fork-specific invariant check without installing provider SDKs or spending model tokens:
 
-> _Note: We recommend using the Continue CLI instead of the JetBrains plugin._
+```bash
+node scripts/verify-continue-continue-standards.mjs
+```
 
-[![GitHub Releases](https://img.shields.io/badge/GitHub_Releases-181717?logo=github&logoColor=white)](https://github.com/continuedev/continue/releases) [![View source](https://img.shields.io/badge/View_source-181717?logo=github&logoColor=white)](extensions/intellij)
+Existing upstream build and test documentation remains in [`TESTING.md`](TESTING.md) and the component directories while the modernization ledger replaces stale assumptions incrementally.
 
-## Contributors
+## Upstream and license
 
-Thank you to the entire Continue community for helping us create a pioneering coding agent.
+Continue Continue is derived from [Continue](https://github.com/continuedev/continue) and retains the upstream Apache-2.0 license and notices.
 
-What we built together pushed the boundaries of what AI developer tooling could be.
-
-We hope this codebase continues to serve as a foundation for others.
-
-## Code friends
-
-<a href="https://github.com/continuedev/continue/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=continuedev/continue&max=500" />
-</a>
-
-## License
-
-Apache 2.0 © 2023-2026 Continue Dev, Inc.
+Apache 2.0 © 2023-2026 Continue Dev, Inc. and contributors. Fork modifications © their respective contributors.

@@ -1,21 +1,16 @@
 import { IDE } from "..";
 import { joinPathsToUri } from "../util/uri";
 
-const DEFAULT_ASSISTANT_FILE = `# This is an example configuration file
+const DEFAULT_ASSISTANT_FILE = `# Local-first starter configuration.
 # To learn more, see the full config.yaml reference: https://docs.continue.dev/reference
+# Remote providers are supported, but add them explicitly when you want them.
 
-name: Example Config
+name: Local Coding
 version: 1.0.0
 schema: v1
 
-# Define which models can be used
-# https://docs.continue.dev/customization/models
 models:
-  - name: my gpt-5
-    provider: openai
-    model: gpt-5
-    apiKey: YOUR_OPENAI_API_KEY_HERE
-  - name: qwen2.5-coder 7b
+  - name: qwen2.5-coder 7b local
     provider: ollama
     model: qwen2.5-coder:7b
     roles:
@@ -23,20 +18,6 @@ models:
       - autocomplete
       - chat
       - edit
-  - name: Claude 4 Sonnet
-    provider: anthropic
-    model: claude-sonnet-4-20250514
-    apiKey: \${{ secrets.ANTHROPIC_API_KEY }}
-    roles:
-      - chat
-      - edit
-      - apply
-    defaultCompletionOptions:
-      contextLength: 200000
-      maxTokens: 64000
-    capabilities:
-      - tool_use
-      - image_input
 `;
 
 export async function createNewAssistantFile(
