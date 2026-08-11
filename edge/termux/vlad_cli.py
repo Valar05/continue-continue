@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import uuid
@@ -24,6 +25,7 @@ from typing import Any
 
 SCHEMA = "continue-continue.vlad-cli.v1"
 DOCTOR_REQUIREMENTS = ("continue", "phone_hands", "qwen", "upstream")
+SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,160}$")
 
 
 def here() -> pathlib.Path:
@@ -53,6 +55,21 @@ def doctor_command() -> list[str]:
 
 def task_id(prefix: str = "vlad") -> str:
     return f"{prefix}:{uuid.uuid4().hex[:16]}"
+
+
+def new_continue_session_id() -> str:
+    return f"vlad-{uuid.uuid4().hex}"
+
+
+def normalize_continue_session_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    session_id = value.strip()
+    if not SESSION_ID_PATTERN.fullmatch(session_id):
+        raise ValueError(
+            "Continue session id must be 3-160 characters using only letters, numbers, _, ., or -"
+        )
+    return session_id
 
 
 def base_task(goal: str, domain: str = "unsorted") -> dict[str, Any]:
@@ -86,9 +103,14 @@ def continue_task(
     readonly: bool = False,
     auto: bool = False,
     resume: bool = False,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     if readonly and auto:
         raise ValueError("Continue task cannot be both readonly and auto")
+    session_id = normalize_continue_session_id(session_id)
+    if resume and session_id:
+        raise ValueError("Continue task cannot use both legacy --resume and an exact session id")
+
     task = base_task(prompt, "code")
     configured_cn = os.environ.get("VLAD_CN_BIN", "cn")
     argv = [configured_cn, "-p"]
@@ -96,9 +118,12 @@ def continue_task(
         argv.append("--readonly")
     if auto:
         argv.append("--auto")
-    if resume:
+    if session_id:
+        argv.extend(["--session-id", session_id])
+    elif resume:
         argv.append("--resume")
     argv.append(task["goal"])
+
     # allowedBins is a per-task *narrowing* request. The edge intersects it with
     # its governing VLAD_ALLOWED_BINS policy, so this can never grant cn when
     # the global policy excludes it.
@@ -110,12 +135,39 @@ def continue_task(
         }
     }
     task["context"]["vladCli"].update(
-        {"surface": "continue", "readonly": readonly, "auto": auto, "resume": resume}
+        {
+            "surface": "continue",
+            "readonly": readonly,
+            "auto": auto,
+            "resume": resume,
+            "continueSessionId": session_id,
+        }
     )
+
+    if readonly:
+        task["requestedOutcome"] = (
+            "Execute a read-only Continue review turn for the requested code work: "
+            + task["goal"]
+        )
+        task["acceptanceCriteria"] = [
+            "Continue runs in --readonly mode and returns review output or an exact blocking boundary.",
+            "The review turn does not itself claim that mutable code work was completed.",
+        ]
+    else:
+        task["requestedOutcome"] = (
+            "Execute the Continue author stage for the requested code work: "
+            + task["goal"]
+            + ". Independent verification is still required before the requested code change is complete."
+        )
+        task["acceptanceCriteria"] = [
+            "The Continue author invocation exits successfully or reports an exact blocking boundary.",
+            "A successful author turn is not final verification of the requested code change.",
+        ]
+
     task["constraints"] = [
         "Continue is the requested coding organ; do not substitute another coding agent.",
         "This task narrows shell authority to the configured Continue binary only.",
-        "Completion requires the edge receipt; a model turn alone is not deployment evidence.",
+        "Completion of this receipt means the Continue stage completed, not that unverified code is accepted.",
     ]
     return task
 
@@ -252,7 +304,8 @@ def status(json_output: bool) -> int:
             "available": bool(continue_binary.get("ok")),
             "policyAllowed": bool(continue_policy.get("ok")),
             "executionGate": bool(continue_permission.get("ok")),
-            "note": "Code/review uses per-task allowedBins narrowing and still requires the governing Vlad edge policy and local-exec gate.",
+            "sessionIdentity": "cn --session-id",
+            "note": "Code/review uses exact Continue session IDs, per-task allowedBins narrowing, and the governing Vlad edge permission policy.",
         },
     }
     if json_output:
@@ -285,8 +338,11 @@ def status(json_output: bool) -> int:
 
 
 def repl() -> int:
-    print("Vlad local. /quit exits; /doctor, /route, /code, /review, /new are available.")
-    continue_session_started = False
+    continue_session_id = new_continue_session_id()
+    print(
+        "Vlad local. /quit exits; /doctor, /route, /code, /review, /session, /new are available."
+    )
+    print(f"Continue session: {continue_session_id}")
     while True:
         try:
             line = input("vlad> ")
@@ -300,30 +356,31 @@ def repl() -> int:
         if text == "/doctor":
             run_doctor([], json_output=False)
             continue
+        if text == "/session":
+            print(continue_session_id)
+            continue
         if text == "/new":
-            continue_session_started = False
-            print("Continue session reset; next /code or /review starts a fresh headless session.")
+            continue_session_id = new_continue_session_id()
+            print(f"New Continue session: {continue_session_id}")
             continue
         if text.startswith("/route "):
             route_request(text[7:].strip(), json_output=False)
             continue
         if text.startswith("/code "):
-            code = run_task(
-                continue_task(text[6:].strip(), resume=continue_session_started),
+            run_task(
+                continue_task(text[6:].strip(), session_id=continue_session_id),
                 json_output=False,
             )
-            if code == 0:
-                continue_session_started = True
             continue
         if text.startswith("/review "):
-            code = run_task(
+            run_task(
                 continue_task(
-                    text[8:].strip(), readonly=True, resume=continue_session_started
+                    text[8:].strip(),
+                    readonly=True,
+                    session_id=continue_session_id,
                 ),
                 json_output=False,
             )
-            if code == 0:
-                continue_session_started = True
             continue
         run_task({"request": text}, json_output=False)
 
@@ -364,11 +421,13 @@ def build_parser() -> argparse.ArgumentParser:
     code = sub.add_parser("code", help="invoke the configured Continue cn coding organ")
     code.add_argument("prompt", nargs="+")
     code.add_argument("--auto", action="store_true", help="pass --auto to cn; Vlad edge gate still applies")
-    code.add_argument("--resume", action="store_true", help="resume the last Continue session in headless mode")
+    code.add_argument("--resume", action="store_true", help="legacy: resume Continue's newest global session")
+    code.add_argument("--session-id", help="pin an exact persistent Continue session id")
 
     review = sub.add_parser("review", help="invoke Continue in readonly review mode")
     review.add_argument("prompt", nargs="+")
-    review.add_argument("--resume", action="store_true")
+    review.add_argument("--resume", action="store_true", help="legacy: resume Continue's newest global session")
+    review.add_argument("--session-id", help="pin an exact persistent Continue session id")
 
     return parser
 
@@ -387,33 +446,47 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     json_output = bool(args.json)
-    if args.command == "doctor":
-        return run_doctor(args.require, json_output=json_output)
-    if args.command == "status":
-        return status(json_output)
-    if args.command == "route":
-        return route_request(" ".join(args.request), json_output=json_output)
-    if args.command in {"run", "ask"}:
-        return run_task({"request": " ".join(args.request)}, json_output=json_output)
-    if args.command == "phone":
-        return run_task(explicit_phone_task(" ".join(args.request)), json_output=json_output)
-    if args.command == "observe":
-        return run_task(
-            explicit_phone_task("Observe only and tell me the current foreground app and screen state."),
-            json_output=json_output,
-        )
-    if args.command == "home":
-        return run_task(explicit_phone_task("Go home."), json_output=json_output)
-    if args.command == "code":
-        return run_task(
-            continue_task(" ".join(args.prompt), auto=args.auto, resume=args.resume),
-            json_output=json_output,
-        )
-    if args.command == "review":
-        return run_task(
-            continue_task(" ".join(args.prompt), readonly=True, resume=args.resume),
-            json_output=json_output,
-        )
+    try:
+        if args.command == "doctor":
+            return run_doctor(args.require, json_output=json_output)
+        if args.command == "status":
+            return status(json_output)
+        if args.command == "route":
+            return route_request(" ".join(args.request), json_output=json_output)
+        if args.command in {"run", "ask"}:
+            return run_task({"request": " ".join(args.request)}, json_output=json_output)
+        if args.command == "phone":
+            return run_task(explicit_phone_task(" ".join(args.request)), json_output=json_output)
+        if args.command == "observe":
+            return run_task(
+                explicit_phone_task("Observe only and tell me the current foreground app and screen state."),
+                json_output=json_output,
+            )
+        if args.command == "home":
+            return run_task(explicit_phone_task("Go home."), json_output=json_output)
+        if args.command == "code":
+            return run_task(
+                continue_task(
+                    " ".join(args.prompt),
+                    auto=args.auto,
+                    resume=args.resume,
+                    session_id=args.session_id,
+                ),
+                json_output=json_output,
+            )
+        if args.command == "review":
+            return run_task(
+                continue_task(
+                    " ".join(args.prompt),
+                    readonly=True,
+                    resume=args.resume,
+                    session_id=args.session_id,
+                ),
+                json_output=json_output,
+            )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     parser.print_help()
     return 2
 
