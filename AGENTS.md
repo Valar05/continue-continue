@@ -52,6 +52,18 @@ The default path must work with locally reachable models and local tools. Paid o
 
 When network access is unavailable, fail clearly and preserve local functionality rather than silently degrading to a different provider or workflow.
 
+## Machine automation law
+
+Continue Continue is the automation layer for machine work initiated by Venice. It owns task boundaries, planning, sequencing, permission handoff, tool selection, lifecycle state, and evidence receipts.
+
+It does **not** absorb the specialized execution organs. Home Center / Computer Hands, MCP servers, shells, media systems, renderers, image generators, DCC tools, game engines, and future executors remain responsible for the physical work they actually perform.
+
+A machine-task domain such as `audio`, `image`, `video`, `game`, `code`, or `system` is routing metadata, not a silo. Cross-domain plans are expected when the commissioned outcome requires them.
+
+The automation envelope grants no new authority. Existing tool permissions, user constraints, and external execution boundaries remain controlling. If a required executor is unavailable, return `blocked` with the missing capability rather than substituting a nearby artifact or pretending transport is completion.
+
+Every terminal machine task must produce a structured receipt that preserves requested outcome, acceptance criteria, terminal status, relevant tool lifecycle evidence, and enough artifact/runtime identifiers to challenge the completion claim.
+
 ## Evidence and completion
 
 Every meaningful engineering handoff should make these legible:
