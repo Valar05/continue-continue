@@ -81,6 +81,20 @@ class VladDoctorTests(unittest.TestCase):
             self.assertFalse(report["ready"])
             self.assertIn("routing_sheet", report["requiredFailures"])
 
+    def test_malformed_enabled_route_blocks_readiness(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            env = self.base_env(root)
+            sheet = pathlib.Path(env["VLAD_ROUTING_SHEET"])
+            sheet.write_text(
+                "priority,enabled,name,domain,contains_any,contains_all,route,target_domain,command,phone_prompt,reason\n"
+                "banana,1,bad,*,settings,,teleport,system,,{goal},bad\n",
+                encoding="utf-8",
+            )
+            report = doctor.diagnose(env)
+            self.assertFalse(report["ready"])
+            self.assertIn("routing_sheet", report["requiredFailures"])
+
     def test_upstream_and_qwen_can_be_required(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), OkHandler)
         thread = Thread(target=server.serve_forever, daemon=True)
