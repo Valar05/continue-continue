@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  AUTOMATION_RECEIPT_MARKER,
   AutomationInputError,
   AutomationRuntime,
 } from "./AutomationRuntime.js";
@@ -25,10 +26,10 @@ describe("AutomationRuntime", () => {
     );
     expect(prompt).toContain("automation/orchestration layer");
     expect(prompt).toContain("Existing tool permission policy still controls");
-    expect(prompt).toContain("BLOCKED");
+    expect(prompt).toContain(AUTOMATION_RECEIPT_MARKER);
   });
 
-  it("accepts new routing domains instead of hard-coding media types", () => {
+  it("accepts future routing domains instead of hard-coding media types", () => {
     const runtime = new AutomationRuntime();
     const task = runtime.createTask({
       domain: "shader_bake",
@@ -38,7 +39,7 @@ describe("AutomationRuntime", () => {
     expect(task.domain).toBe("shader_bake");
   });
 
-  it("produces a bounded receipt from tool lifecycle evidence", () => {
+  it("only completes from an explicit receipt with evidence", () => {
     const changed = vi.fn();
     const runtime = new AutomationRuntime([], changed);
     const task = runtime.createTask({
@@ -49,19 +50,41 @@ describe("AutomationRuntime", () => {
     });
 
     runtime.markRunning(task.taskId);
-    runtime.markToolStart(task.taskId, "run_terminal_command");
-    runtime.markToolResult(task.taskId, "run_terminal_command", "completed");
-    runtime.markCompleted(task.taskId, "Build and smoke test passed.");
+    runtime.markToolStart(task.taskId, "Bash");
+    runtime.markToolResult(task.taskId, "Bash", "completed");
+    runtime.applyAgentResponse(
+      task.taskId,
+      `<${AUTOMATION_RECEIPT_MARKER}>{"status":"completed","summary":"Build and smoke test passed.","evidence":["build:exit=0","smoke:test=passed"]}</${AUTOMATION_RECEIPT_MARKER}>`,
+    );
 
     const receipt = runtime.getReceipt(task.taskId);
-
     expect(receipt?.status).toBe("completed");
-    expect(receipt?.resultSummary).toContain("smoke test passed");
+    expect(receipt?.evidence).toEqual(["build:exit=0", "smoke:test=passed"]);
     expect(receipt?.toolEvents).toHaveLength(2);
     expect(changed).toHaveBeenCalled();
   });
 
-  it("keeps permission blocking distinct from failure", () => {
+  it("refuses receiptless victory", () => {
+    const runtime = new AutomationRuntime();
+    const task = runtime.createTask({
+      taskId: "venice-video-verify",
+      domain: "video",
+      goal: "Render a clip.",
+    });
+
+    runtime.markRunning(task.taskId);
+    runtime.applyAgentResponse(task.taskId, "Done! Looks great.");
+    expect(runtime.getTask(task.taskId)?.status).toBe("awaiting_verification");
+    expect(runtime.getReceipt(task.taskId)).toBeUndefined();
+
+    runtime.applyAgentResponse(
+      task.taskId,
+      `<${AUTOMATION_RECEIPT_MARKER}>{"status":"completed","summary":"Rendered.","evidence":[]}</${AUTOMATION_RECEIPT_MARKER}>`,
+    );
+    expect(runtime.getTask(task.taskId)?.status).toBe("awaiting_verification");
+  });
+
+  it("keeps permission blocking distinct from capability blocking", () => {
     const runtime = new AutomationRuntime();
     const task = runtime.createTask({
       taskId: "venice-video-001",
@@ -70,29 +93,43 @@ describe("AutomationRuntime", () => {
     });
 
     runtime.markRunning(task.taskId);
-    runtime.markBlocked(task.taskId, "render.video", "permission-123");
-
-    expect(runtime.getTask(task.taskId)?.status).toBe("blocked");
+    runtime.markPermissionBlocked(task.taskId, "render.video", "permission-123");
+    expect(runtime.getTask(task.taskId)?.status).toBe("blocked_permission");
 
     runtime.markPermissionResolved(task.taskId, "permission-123", true);
     expect(runtime.getTask(task.taskId)?.status).toBe("running");
+  });
+
+  it("records delegation without laundering it into completion", () => {
+    const runtime = new AutomationRuntime();
+    const task = runtime.createTask({
+      taskId: "vlad-render-001",
+      actor: "vlad",
+      domain: "video",
+      goal: "Render the heavy scene.",
+    });
+
+    runtime.markRunning(task.taskId);
+    runtime.applyAgentResponse(
+      task.taskId,
+      `<${AUTOMATION_RECEIPT_MARKER}>{"status":"delegated","summary":"Sent to the full runtime.","evidence":["upstream-task:vlad-render-001"],"delegateTarget":"continue-continue-full"}</${AUTOMATION_RECEIPT_MARKER}>`,
+    );
+
+    expect(runtime.getTask(task.taskId)?.status).toBe("delegated");
+    expect(runtime.getReceipt(task.taskId)?.status).toBe("delegated");
+    expect(runtime.getReceipt(task.taskId)?.delegateTarget).toBe(
+      "continue-continue-full",
+    );
   });
 
   it("rejects malformed task boundaries", () => {
     const runtime = new AutomationRuntime();
 
     expect(() =>
-      runtime.createTask({
-        domain: "Video Render",
-        goal: "Render it",
-      }),
+      runtime.createTask({ domain: "Video Render", goal: "Render it" }),
     ).toThrow(AutomationInputError);
-
     expect(() =>
-      runtime.createTask({
-        domain: "video",
-        goal: "   ",
-      }),
+      runtime.createTask({ domain: "video", goal: "   " }),
     ).toThrow(AutomationInputError);
   });
 
@@ -106,7 +143,6 @@ describe("AutomationRuntime", () => {
     first.markRunning(task.taskId);
 
     const restored = new AutomationRuntime(first.listTasks());
-
     expect(restored.getTask(task.taskId)?.status).toBe("running");
     expect(restored.renderTaskPrompt(task.taskId)).toContain("contact sheet");
   });
