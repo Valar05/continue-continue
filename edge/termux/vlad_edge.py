@@ -25,6 +25,7 @@ from typing import Any
 TASK_ID_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:-")
 TERMINAL = {"completed", "blocked", "delegated", "failed", "cancelled"}
 PHONE_ASK_DEFAULT = "/data/data/com.termux/files/usr/local/bin/home-center-phone-ask"
+DEFAULT_ALLOWED_BINS = "cn,git,ffmpeg,ffprobe,python,python3,node,npm,npx,rg,grep,find,ls,pwd,cat,mkdir,cp"
 
 
 def now_ms() -> int:
@@ -255,6 +256,24 @@ def run_phone_hands(record: dict[str, Any], route: dict[str, Any]) -> dict[str, 
     return finish(record, "completed", "Phone Hands completed the requested phone action.", evidence)
 
 
+def _shell_allowed_bins(action: dict[str, Any]) -> tuple[set[str] | None, str | None]:
+    policy = set(
+        filter(
+            None,
+            os.environ.get("VLAD_ALLOWED_BINS", DEFAULT_ALLOWED_BINS).split(","),
+        )
+    )
+    requested = action.get("allowedBins")
+    if requested is None:
+        return policy, None
+    if not isinstance(requested, list) or not requested or not all(
+        isinstance(item, str) and item.strip() for item in requested
+    ):
+        return None, "edge.action.allowedBins must be a non-empty string array when provided"
+    narrowed = {pathlib.Path(item.strip()).name for item in requested}
+    return policy & narrowed, None
+
+
 def run_shell(record: dict[str, Any], route: dict[str, Any]) -> dict[str, Any]:
     if not enabled("VLAD_ALLOW_LOCAL_EXEC"):
         return finish(record, "blocked", "Local command execution is disabled.", ["gate:VLAD_ALLOW_LOCAL_EXEC=0"])
@@ -262,12 +281,15 @@ def run_shell(record: dict[str, Any], route: dict[str, Any]) -> dict[str, Any]:
     argv = action.get("argv")
     if not isinstance(argv, list) or not argv or not all(isinstance(x, str) and x for x in argv):
         return finish(record, "blocked", "Explicit shell action requires argv as a non-empty string array.", ["contract:edge.action.argv"])
-    allowed = set(filter(None, os.environ.get("VLAD_ALLOWED_BINS", "cn,git,ffmpeg,ffprobe,python,python3,node,npm,npx,rg,grep,find,ls,pwd,cat,mkdir,cp").split(",")))
+    allowed, allowed_error = _shell_allowed_bins(action)
+    if allowed_error:
+        return finish(record, "blocked", allowed_error, ["contract:edge.action.allowedBins"])
+    assert allowed is not None
     binary = pathlib.Path(argv[0]).name
     if binary not in allowed:
-        return finish(record, "blocked", f"Binary {binary} is not allowed by Vlad edge policy.", [f"allowed_bins:{','.join(sorted(allowed))}"])
+        return finish(record, "blocked", f"Binary {binary} is not allowed by Vlad edge policy for this task.", [f"allowed_bins:{','.join(sorted(allowed))}"])
     completed = subprocess.run(argv, capture_output=True, text=True, timeout=300, check=False)
-    evidence = [f"shell:{binary}:exit={completed.returncode}"]
+    evidence = [f"shell:{binary}:exit={completed.returncode}", f"shell:allowed_bins={','.join(sorted(allowed))}"]
     if completed.stdout.strip():
         evidence.append("stdout=" + completed.stdout.strip()[:2000])
     if completed.returncode != 0:
@@ -394,10 +416,10 @@ def capabilities() -> dict[str, Any]:
         "domains": "open",
         "routes": ["phone_hands", "shell", "delegate", "blocked"],
         "phoneHands": {"enabled": enabled("VLAD_ALLOW_PHONE_HANDS"), "binary": os.environ.get("PHONE_ASK_BIN", PHONE_ASK_DEFAULT)},
-        "localExec": {"enabled": enabled("VLAD_ALLOW_LOCAL_EXEC")},
+        "localExec": {"enabled": enabled("VLAD_ALLOW_LOCAL_EXEC"), "allowedBins": sorted(set(filter(None, os.environ.get("VLAD_ALLOWED_BINS", DEFAULT_ALLOWED_BINS).split(","))))},
         "delegation": {"configured": bool(os.environ.get("CONTINUE_CONTINUE_UPSTREAM_URL"))},
         "qwenRouter": {"configured": bool(os.environ.get("QWEN_BASE_URL")), "model": os.environ.get("QWEN_MODEL", "Qwen3-1.7B-Q6_K")},
-        "notes": ["Task intent never grants Phone Hands or shell permission.", "Delegated is a handoff receipt, not completion."],
+        "notes": ["Task intent never grants Phone Hands or shell permission.", "Per-task allowedBins can only narrow the governing shell policy.", "Delegated is a handoff receipt, not completion."],
     }
 
 
