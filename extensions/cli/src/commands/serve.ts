@@ -37,7 +37,6 @@ import { getGitDiffSnapshot } from "../util/git.js";
 import { logger } from "../util/logger.js";
 import { readStdinSync } from "../util/stdin.js";
 
-import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
 import {
   beginAutomationTurn,
   checkAgentComplete,
@@ -47,12 +46,12 @@ import {
   removePartialAssistantMessage,
   shouldQueueInitialPrompt,
   streamChatResponseWithInterruption,
+  type ServeOptions,
   type ServerState,
 } from "./serve.helpers.js";
 
 export { shouldQueueInitialPrompt };
 
-interface ServeOptions extends ExtendedCommandOptions { timeout?: string; port?: string; id?: string; }
 
 // eslint-disable-next-line max-statements
 export async function serve(prompt?: string, options: ServeOptions = {}) {
