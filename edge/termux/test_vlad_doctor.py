@@ -1,4 +1,4 @@
-import os
+import importlib.util
 import pathlib
 import stat
 import tempfile
@@ -6,7 +6,11 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 
-from vlad_doctor import diagnose
+MODULE_PATH = pathlib.Path(__file__).with_name("vlad_doctor.py")
+spec = importlib.util.spec_from_file_location("vlad_doctor", MODULE_PATH)
+doctor = importlib.util.module_from_spec(spec)
+assert spec and spec.loader
+spec.loader.exec_module(doctor)
 
 
 class OkHandler(BaseHTTPRequestHandler):
@@ -45,7 +49,7 @@ class VladDoctorTests(unittest.TestCase):
     def test_phone_hands_required_and_ready(self):
         with tempfile.TemporaryDirectory() as temp:
             env = self.base_env(pathlib.Path(temp))
-            report = diagnose(env, {"phone_hands"})
+            report = doctor.diagnose(env, {"phone_hands"})
             self.assertTrue(report["ready"])
             self.assertEqual(report["requiredFailures"], [])
 
@@ -53,7 +57,7 @@ class VladDoctorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             env = self.base_env(pathlib.Path(temp))
             env["VLAD_ALLOW_PHONE_HANDS"] = "0"
-            report = diagnose(env, {"phone_hands"})
+            report = doctor.diagnose(env, {"phone_hands"})
             self.assertFalse(report["ready"])
             self.assertIn("phone_hands_permission", report["requiredFailures"])
 
@@ -67,7 +71,7 @@ class VladDoctorTests(unittest.TestCase):
                 base = f"http://127.0.0.1:{server.server_address[1]}"
                 env["CONTINUE_CONTINUE_UPSTREAM_URL"] = base
                 env["QWEN_BASE_URL"] = base
-                report = diagnose(env, {"upstream", "qwen"})
+                report = doctor.diagnose(env, {"upstream", "qwen"})
                 self.assertTrue(report["ready"])
         finally:
             server.shutdown()
