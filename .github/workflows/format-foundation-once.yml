@@ -1,0 +1,50 @@
+name: Format Foundation Once
+
+on:
+  push:
+    branches:
+      - foundation/venice-machine-automation
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: ${{ !contains(github.event.head_commit.message, '[prettier]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: foundation/venice-machine-automation
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - name: Install root dependencies
+        run: npm ci
+      - name: Format foundation files
+        run: |
+          npx prettier --write \
+            extensions/cli/src/automation/AutomationHttpService.test.ts \
+            extensions/cli/src/automation/AutomationHttpService.ts \
+            extensions/cli/src/automation/AutomationRuntime.test.ts \
+            extensions/cli/src/automation/AutomationTaskStore.ts \
+            extensions/cli/src/commands/serve.helpers.ts \
+            extensions/cli/src/commands/serve.ts
+      - name: Commit formatting only
+        run: |
+          if git diff --quiet; then
+            echo 'No formatting changes needed.'
+            exit 0
+          fi
+          git config user.name 'continue-continue-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            extensions/cli/src/automation/AutomationHttpService.test.ts \
+            extensions/cli/src/automation/AutomationHttpService.ts \
+            extensions/cli/src/automation/AutomationRuntime.test.ts \
+            extensions/cli/src/automation/AutomationTaskStore.ts \
+            extensions/cli/src/commands/serve.helpers.ts \
+            extensions/cli/src/commands/serve.ts
+          git commit -m 'style: format automation foundation [prettier]'
+          git push origin HEAD:foundation/venice-machine-automation
