@@ -1,0 +1,32 @@
+name: Vlad Termux Edge
+
+on:
+  pull_request:
+    paths:
+      - "edge/termux/**"
+      - "docs/continue-continue/VLAD_TERMUX_EDGE.md"
+      - "scripts/verify-continue-continue-standards.mjs"
+      - ".github/workflows/vlad-edge.yml"
+  push:
+    branches: [main]
+    paths:
+      - "edge/termux/**"
+      - "docs/continue-continue/VLAD_TERMUX_EDGE.md"
+      - "scripts/verify-continue-continue-standards.mjs"
+      - ".github/workflows/vlad-edge.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  vlad-edge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile tiny edge runtime
+        run: python -m py_compile edge/termux/vlad_edge.py
+      - name: Run Vlad authority and routing tests
+        run: python -m unittest edge/termux/test_vlad_edge.py
