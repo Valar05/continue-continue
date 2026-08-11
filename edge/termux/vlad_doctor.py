@@ -21,6 +21,7 @@ DEFAULT_PHONE_ASK = "/data/data/com.termux/files/usr/local/bin/home-center-phone
 DEFAULT_EDGE_BIN = "/data/data/com.termux/files/usr/local/bin/continue-continue-vlad"
 DEFAULT_INTERNAL_EDGE_BIN = "/data/data/com.termux/files/usr/local/bin/continue-continue-vlad-edge"
 DEFAULT_ROUTING_SHEET = "/data/data/com.termux/files/usr/etc/continue-continue/routes.csv"
+VALID_ROUTES = {"phone_hands", "shell", "delegate", "blocked", "passthrough"}
 ROUTING_COLUMNS = {
     "priority",
     "enabled",
@@ -88,14 +89,31 @@ def _routing_sheet(path: str) -> tuple[bool, str]:
             rows = list(reader)
     except (OSError, csv.Error) as exc:
         return False, f"unreadable: {exc}"
-    enabled_rows = sum(
-        1
+
+    enabled_rows = [
+        row
         for row in rows
-        if str(row.get("enabled") or "").strip().lower() in {"1", "true", "yes", "on"}
-    )
+        if str(row.get("enabled") or "").strip().lower()
+        in {"1", "true", "yes", "on"}
+    ]
     if not enabled_rows:
         return False, "routing sheet has no enabled rows"
-    return True, f"{target} ({enabled_rows} enabled rows)"
+
+    for index, row in enumerate(enabled_rows, start=1):
+        name = str(row.get("name") or "").strip()
+        if not name:
+            return False, f"enabled row {index} has no name"
+        try:
+            int(str(row.get("priority") or ""))
+        except ValueError:
+            return False, f"rule {name} has invalid priority"
+        route = str(row.get("route") or "").strip().lower()
+        if route not in VALID_ROUTES:
+            return False, f"rule {name} has invalid route: {route}"
+        if route == "shell" and not str(row.get("command") or "").strip():
+            return False, f"shell rule {name} has no command"
+
+    return True, f"{target} ({len(enabled_rows)} enabled rows)"
 
 
 def _parse_requirements(values: list[str], env: Mapping[str, str]) -> set[str]:
