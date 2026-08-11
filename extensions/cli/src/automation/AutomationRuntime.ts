@@ -1,13 +1,23 @@
 import { randomUUID } from "node:crypto";
 
 export const AUTOMATION_TASK_MARKER = "continue-continue-machine-task";
+export const AUTOMATION_RECEIPT_MARKER = "continue-continue-receipt";
 
 export type AutomationTaskStatus =
   | "queued"
   | "running"
-  | "blocked"
-  | "paused"
+  | "blocked_permission"
+  | "awaiting_verification"
+  | "delegated"
   | "completed"
+  | "blocked"
+  | "failed"
+  | "cancelled";
+
+export type AutomationReceiptStatus =
+  | "completed"
+  | "blocked"
+  | "delegated"
   | "failed"
   | "cancelled";
 
@@ -32,25 +42,33 @@ export interface AutomationToolEvent {
     | "tool_result"
     | "tool_error"
     | "permission_required"
-    | "permission_resolved";
+    | "permission_resolved"
+    | "delegated";
   toolName?: string;
   status?: string;
   detail?: string;
   requestId?: string;
 }
 
+export interface AutomationAgentReceipt {
+  status: "completed" | "blocked" | "delegated" | "failed";
+  summary: string;
+  evidence?: string[];
+  error?: string;
+  delegateTarget?: string;
+}
+
 export interface AutomationReceipt {
   taskId: string;
   actor: string;
   domain: string;
-  status: Extract<
-    AutomationTaskStatus,
-    "completed" | "failed" | "cancelled"
-  >;
+  status: AutomationReceiptStatus;
   requestedOutcome: string;
   acceptanceCriteria: string[];
   resultSummary?: string;
+  evidence: string[];
   error?: string;
+  delegateTarget?: string;
   toolEvents: AutomationToolEvent[];
   createdAt: number;
   startedAt?: number;
@@ -78,7 +96,9 @@ export interface AutomationTaskRecord {
   currentTool?: string;
   pendingPermissionRequestId?: string;
   resultSummary?: string;
+  evidence: string[];
   error?: string;
+  delegateTarget?: string;
   toolEvents: AutomationToolEvent[];
   receipt?: AutomationReceipt;
 }
@@ -175,6 +195,44 @@ function lastEventSlice(
   return events.slice(Math.max(0, events.length - MAX_EVENTS));
 }
 
+function parseAgentReceipt(response: string): AutomationAgentReceipt | null {
+  const marker = new RegExp(
+    `<${AUTOMATION_RECEIPT_MARKER}>\\s*([\\s\\S]*?)\\s*</${AUTOMATION_RECEIPT_MARKER}>`,
+  );
+  const body = response.match(marker)?.[1];
+  if (!body) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    throw new AutomationInputError(
+      "automation receipt marker contains invalid JSON",
+    );
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new AutomationInputError("automation receipt must be an object");
+  }
+  const candidate = parsed as Record<string, unknown>;
+  const status = candidate.status;
+  if (
+    !["completed", "blocked", "delegated", "failed"].includes(String(status))
+  ) {
+    throw new AutomationInputError("automation receipt has unsupported status");
+  }
+  return {
+    status: status as AutomationAgentReceipt["status"],
+    summary: text(candidate.summary, "receipt.summary", 12000),
+    evidence: stringList(candidate.evidence, "receipt.evidence", 32, 2000),
+    error: optionalText(candidate.error, "receipt.error", 4000),
+    delegateTarget: optionalText(
+      candidate.delegateTarget,
+      "receipt.delegateTarget",
+      500,
+    ),
+  };
+}
+
 export class AutomationRuntime {
   private tasks = new Map<string, AutomationTaskRecord>();
 
@@ -184,7 +242,10 @@ export class AutomationRuntime {
   ) {
     for (const candidate of initialTasks) {
       if (candidate?.taskId && TASK_ID_RE.test(candidate.taskId)) {
-        this.tasks.set(candidate.taskId, clone(candidate));
+        const restored = clone(candidate);
+        restored.evidence ??= [];
+        restored.toolEvents ??= [];
+        this.tasks.set(candidate.taskId, restored);
       }
     }
   }
@@ -250,6 +311,7 @@ export class AutomationRuntime {
       cancelRequested: false,
       createdAt: now,
       updatedAt: now,
+      evidence: [],
       toolEvents: [],
     };
 
@@ -295,12 +357,16 @@ ${JSON.stringify(payload, null, 2)}
 
 EXECUTION CONTRACT
 - This is a machine task. Preserve the requested outcome, actor, lane, constraints, evidence standard, and delivery surface.
-- Continue Continue is the automation/orchestration layer. Connected MCP tools, terminal commands, media systems, game engines, renderers, and other executors are specialized organs underneath it.
+- Continue Continue is the automation/orchestration layer. Connected MCP tools, terminal commands, media systems, game engines, renderers, phone hands, and other executors are specialized organs underneath it.
 - The domain is routing metadata, not a wall. A game task may legitimately use code, image, audio, video, build, test, and system tools in one plan.
 - Prefer the named tools when they fit, but never substitute an adjacent tool or artifact merely because it is easier.
 - Existing tool permission policy still controls execution. This task envelope does not grant new authority.
-- If a required executor or capability is unavailable, stop at that boundary and report BLOCKED with the missing capability. Do not counterfeit completion.
-- Completion requires the requested result plus observable evidence. Return enough artifact identifiers, paths/URLs, hashes, runtime observations, or tool receipts for another agent or human to challenge the claim.
+- If a required executor or capability is unavailable, stop at that boundary. Do not counterfeit completion.
+- Completion requires the requested result plus observable evidence.
+- End the machine turn with exactly one machine-readable receipt marker:
+<${AUTOMATION_RECEIPT_MARKER}>{"status":"completed|blocked|delegated|failed","summary":"...","evidence":["artifact id/path/url/hash/runtime observation/tool receipt"],"error":"optional","delegateTarget":"optional"}</${AUTOMATION_RECEIPT_MARKER}>
+- status=completed requires at least one evidence item. If evidence is not yet sufficient, do not claim completed.
+- status=delegated means responsibility moved to another executor; it is not completion of the requested outcome.
 </${AUTOMATION_TASK_MARKER}>`;
   }
 
@@ -310,7 +376,13 @@ EXECUTION CONTRACT
 
   shouldSkip(taskId: string): boolean {
     const task = this.tasks.get(taskId);
-    return !task || task.cancelRequested || task.status === "cancelled";
+    return (
+      !task ||
+      task.cancelRequested ||
+      ["completed", "blocked", "failed", "cancelled", "delegated"].includes(
+        task.status,
+      )
+    );
   }
 
   markRunning(taskId: string): void {
@@ -365,13 +437,13 @@ EXECUTION CONTRACT
     });
   }
 
-  markBlocked(
+  markPermissionBlocked(
     taskId: string,
     toolName: string,
     requestId: string,
   ): void {
     this.mutate(taskId, (task) => {
-      task.status = "blocked";
+      task.status = "blocked_permission";
       task.currentTool = toolName;
       task.pendingPermissionRequestId = requestId;
       this.pushEvent(task, {
@@ -389,7 +461,6 @@ EXECUTION CONTRACT
     approved: boolean,
   ): void {
     this.mutate(taskId, (task) => {
-      task.status = "running";
       task.pendingPermissionRequestId = undefined;
       this.pushEvent(task, {
         at: Date.now(),
@@ -397,21 +468,39 @@ EXECUTION CONTRACT
         requestId,
         status: approved ? "approved" : "rejected",
       });
+      if (approved) {
+        task.status = "running";
+      } else {
+        task.error = "Required tool permission was rejected.";
+        this.finish(task, "blocked");
+      }
     });
   }
 
   markPaused(taskId: string): void {
     this.mutate(taskId, (task) => {
       if (task.status !== "cancelled") {
-        task.status = "paused";
+        task.status = "awaiting_verification";
       }
+    });
+  }
+
+  markAwaitingVerification(
+    taskId: string,
+    resultSummary?: string,
+    evidence: string[] = [],
+  ): void {
+    this.mutate(taskId, (task) => {
+      task.status = "awaiting_verification";
+      task.resultSummary = resultSummary?.trim().slice(0, 12000);
+      task.evidence = stringList(evidence, "evidence", 32, 2000);
     });
   }
 
   requestCancel(taskId: string): AutomationTaskRecord {
     this.mutate(taskId, (task) => {
       task.cancelRequested = true;
-      if (task.status !== "running") {
+      if (task.status !== "running" && task.status !== "blocked_permission") {
         this.finish(task, "cancelled");
       }
     });
@@ -422,11 +511,49 @@ EXECUTION CONTRACT
     this.mutate(taskId, (task) => this.finish(task, "cancelled"));
   }
 
-  markCompleted(taskId: string, resultSummary?: string): void {
+  applyAgentResponse(taskId: string, response: string): AutomationTaskRecord {
+    let receipt: AutomationAgentReceipt | null = null;
+    try {
+      receipt = parseAgentReceipt(response);
+    } catch (error) {
+      this.markAwaitingVerification(
+        taskId,
+        `Agent returned an invalid machine receipt: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return this.getTask(taskId)!;
+    }
+
+    if (!receipt) {
+      this.markAwaitingVerification(
+        taskId,
+        response.trim().slice(0, 12000) ||
+          "Agent turn ended without a machine receipt.",
+      );
+      return this.getTask(taskId)!;
+    }
+
+    if (receipt.status === "completed" && !receipt.evidence?.length) {
+      this.markAwaitingVerification(taskId, receipt.summary, []);
+      return this.getTask(taskId)!;
+    }
+
     this.mutate(taskId, (task) => {
-      task.resultSummary = resultSummary?.trim().slice(0, 12000);
-      this.finish(task, "completed");
+      task.resultSummary = receipt.summary;
+      task.evidence = receipt.evidence ?? [];
+      task.error = receipt.error;
+      task.delegateTarget = receipt.delegateTarget;
+
+      if (receipt.status === "delegated") {
+        this.pushEvent(task, {
+          at: Date.now(),
+          kind: "delegated",
+          detail: receipt.delegateTarget ?? receipt.summary,
+        });
+      }
+
+      this.finish(task, receipt.status);
     });
+    return this.getTask(taskId)!;
   }
 
   markFailed(taskId: string, error: string): void {
@@ -470,7 +597,7 @@ EXECUTION CONTRACT
 
   private finish(
     task: AutomationTaskRecord,
-    status: "completed" | "failed" | "cancelled",
+    status: AutomationReceiptStatus,
   ): void {
     const completedAt = Date.now();
     task.status = status;
@@ -486,7 +613,9 @@ EXECUTION CONTRACT
       requestedOutcome: task.requestedOutcome,
       acceptanceCriteria: [...task.acceptanceCriteria],
       resultSummary: task.resultSummary,
+      evidence: [...task.evidence],
       error: task.error,
+      delegateTarget: task.delegateTarget,
       toolEvents: clone(task.toolEvents),
       createdAt: task.createdAt,
       startedAt: task.startedAt,
