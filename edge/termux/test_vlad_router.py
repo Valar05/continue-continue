@@ -113,6 +113,13 @@ class VladRouterTests(unittest.TestCase):
                 self.assertEqual(decision["route"], expected_route)
                 self.assertEqual(task["domain"], expected_domain)
 
+    def test_shipped_sheet_does_not_steal_media_volume_requests(self):
+        task, decision = router.apply_sheet(
+            {"request": "Increase the volume of this audio file"}, ROOT / "routes.csv"
+        )
+        self.assertEqual(decision["route"], "delegate")
+        self.assertEqual(task["domain"], "audio")
+
     def test_public_exit_code_contract(self):
         self.assertEqual(router.exit_code_for_status("completed"), 0)
         self.assertEqual(router.exit_code_for_status("delegated"), 0)
