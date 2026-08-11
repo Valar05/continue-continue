@@ -2,11 +2,11 @@
 
 ## Mission
 
-Continue Continue is the automation layer for machine work initiated by Venice.
+Continue Continue is the automation layer for machine work initiated by Venice and executed by any authorized machine body, including Vlad's tiny Termux edge.
 
-It owns **orchestration**: task boundaries, sequencing, tool selection, permission handoff, lifecycle state, evidence, receipts, and exact blocking boundaries.
+It owns **orchestration**: task boundaries, sequencing, tool selection, permission handoff, lifecycle state, evidence, receipts, delegation, and exact blocking boundaries.
 
-It does **not** replace the execution organs. Existing specialized systems remain authoritative for the work they actually perform: Home Center / Computer Hands, MCP servers, shells, FFmpeg, renderers, image systems, game engines, DCC tools, local models, and future adapters.
+It does **not** replace the execution organs. Existing specialized systems remain authoritative for the work they actually perform: Home Center / Computer Hands, Phone Hands / Shizuku, MCP servers, shells, FFmpeg, renderers, image systems, game engines, DCC tools, local models, and future adapters.
 
 The compact law is:
 
@@ -14,12 +14,12 @@ The compact law is:
 
 ## Machine task envelope
 
-`cn serve` exposes a typed automation API. A task contains:
+The full `cn serve` runtime and Vlad edge accept the same task shape:
 
 - `taskId` — stable identity, supplied or generated;
-- `actor` — defaults to `venice`;
+- `actor` — defaults to `venice` in the full runtime and `vlad` at the phone edge;
 - `domain` — an open routing slug such as `audio`, `image`, `video`, `game`, `code`, `system`, or a future domain;
-- `goal` — what Venice wants done;
+- `goal` — what is wanted;
 - `requestedOutcome` — the concrete result that must exist;
 - `acceptanceCriteria` — evidence that closes the task;
 - `constraints` — mission boundaries that must survive planning;
@@ -30,44 +30,58 @@ The compact law is:
 
 The domain is metadata, not a silo. A `game` task may legitimately traverse code, image, audio, video, build, runtime control, testing, and packaging.
 
-## HTTP surface
+## Full-runtime HTTP surface
 
-The automation surface extends `cn serve` rather than creating a parallel daemon.
+The automation surface extends `cn serve` rather than creating a parallel desktop daemon.
 
 - `POST /automation/tasks` — create and queue a machine task.
 - `GET /automation/tasks` — list task lifecycle state.
 - `GET /automation/tasks/:taskId` — read one task.
 - `GET /automation/tasks/:taskId/receipt` — read the terminal receipt; non-terminal tasks return a conflict rather than a counterfeit receipt.
 - `POST /automation/tasks/:taskId/cancel` — cancel queued work or abort the active task.
-- `GET /automation/capabilities` — inspect connected MCP tools plus built-in execution tools.
-- `GET /state` — includes the current automation ledger beside ordinary agent state.
+- `GET /automation/capabilities` — inspect the runtime's concrete built-in execution surface and adapter notes.
 
-Existing `/permission` remains the permission authority for tool calls. The machine-task envelope never upgrades permission.
+Existing `/permission` remains the authority for full-runtime tool calls. The machine-task envelope never upgrades permission.
 
-## Lifecycle
+## Lifecycle and receipts
 
 Task states are explicit:
 
-`queued → running → blocked | paused | completed | failed | cancelled`
+`queued → running → blocked_permission | awaiting_verification | delegated | completed | blocked | failed | cancelled`
 
-`blocked` is not failure. It means Continue Continue reached a permission or capability boundary and still knows what would be required to proceed.
+`blocked_permission` is resumable when authority is granted. `blocked` is a terminal receipt naming a capability or authority boundary. `delegated` proves a handoff to another executor; it does **not** prove the requested outcome is complete.
+
+An agent turn ending is never enough to close a machine task. The full runtime requires an explicit `<continue-continue-receipt>` marker. `completed` additionally requires non-empty evidence. Missing or malformed receipts move the task to `awaiting_verification` instead of manufacturing success.
 
 A task receipt records:
 
 - task identity, actor, and domain;
 - requested outcome and acceptance criteria;
-- terminal status;
-- result summary or error;
+- terminal or delegated status;
+- result summary, evidence, delegate target, or error;
 - bounded tool lifecycle events;
 - create/start/complete timestamps.
 
-Tool events distinguish `tool_start`, `tool_result`, `tool_error`, `permission_required`, and `permission_resolved` so a multi-organ task does not collapse into opaque prose.
+Tool events distinguish `tool_start`, `tool_result`, `tool_error`, `permission_required`, `permission_resolved`, and `delegated` so a multi-organ task does not collapse into opaque prose.
 
 ## Continuity
 
-Automation records ride inside the existing long-lived Continue session. `cn serve --id <stable-id>` restores the task ledger with the same session history. Storage-sync snapshots also expose the ledger through `/state`.
+Full-runtime machine tasks persist independently under `${CONTINUE_GLOBAL_DIR:-~/.continue}/automation/tasks/`. Writes are atomic replacements. The task ledger therefore survives ordinary `cn serve` process restarts without making conversation history the only source of machine truth.
 
-Session persistence is runtime continuity, not proof of delivery. Durable completion evidence should still name the real artifact, hash, runtime observation, external receipt, or target-system readback.
+Vlad persists the same task identities and receipts under `${CONTINUE_CONTINUE_EDGE_DIR:-~/.continue-continue/vlad}/tasks/`.
+
+Local persistence is runtime continuity, not proof of delivery. Durable completion evidence must still name the real artifact, hash, runtime observation, external receipt, or target-system readback.
+
+## Vlad edge
+
+Vlad is not a second desktop Continue installation. `edge/termux/vlad_edge.py` is a stdlib-small edge runtime using the same task envelope and four routes:
+
+- `phone_hands` — explicit Phone Hands/Shizuku execution;
+- `shell` — explicit Termux argv execution under a binary allowlist;
+- `delegate` — same task ID and commission forwarded to the full runtime;
+- `blocked` — no safe/authorized route exists.
+
+Phone Hands and local shell execution default OFF and require explicit environment gates. A local Qwen endpoint may recommend routing but cannot enable an executor. See `VLAD_TERMUX_EDGE.md`.
 
 ## Judgment jars
 
@@ -81,7 +95,7 @@ The existing coding-agent jars govern automation too:
 
 ## Adapter law
 
-New machine capabilities should normally enter as tools or MCP servers. Adding `audio`, `image`, `video`, or `game` capability does not require changing the automation protocol.
+New machine capabilities should normally enter as tools or MCP servers. Adding `audio`, `image`, `video`, `game`, fabrication, or an unknown future domain does not require changing the automation protocol.
 
 An adapter is healthy when it exposes enough structured evidence for Continue Continue to answer three questions:
 
