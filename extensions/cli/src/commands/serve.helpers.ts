@@ -7,6 +7,14 @@ import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { StreamCallbacks } from "../stream/streamChatResponse.types.js";
 import { logger } from "../util/logger.js";
 
+export function shouldQueueInitialPrompt(
+  history: ChatHistoryItem[],
+  prompt?: string | null,
+): boolean {
+  if (!prompt) return false;
+  return !history.some((item) => item.message.role !== "system");
+}
+
 export function removePartialAssistantMessage(
   sessionHistory: ChatHistoryItem[],
 ): void {
