@@ -1,6 +1,8 @@
 import importlib.util
+import os
 import pathlib
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).parent
 MODULE = ROOT / "vlad_cli.py"
@@ -19,11 +21,21 @@ class VladCliTests(unittest.TestCase):
 
     def test_continue_default_preserves_continue_as_requested_coding_organ(self):
         task = vlad.continue_task("Add one focused test")
-        argv = task["context"]["edge"]["action"]["argv"]
+        action = task["context"]["edge"]["action"]
+        argv = action["argv"]
         self.assertEqual(argv[:2], ["cn", "-p"])
+        self.assertEqual(action["allowedBins"], ["cn"])
         self.assertNotIn("--auto", argv)
         self.assertNotIn("--readonly", argv)
         self.assertTrue(any("Continue is the requested coding organ" in item for item in task["constraints"]))
+        self.assertTrue(any("narrows shell authority" in item for item in task["constraints"]))
+
+    def test_continue_custom_path_narrows_to_binary_basename(self):
+        with mock.patch.dict(os.environ, {"VLAD_CN_BIN": "/opt/continue/bin/cn"}):
+            task = vlad.continue_task("Add one focused test")
+        action = task["context"]["edge"]["action"]
+        self.assertEqual(action["argv"][0], "/opt/continue/bin/cn")
+        self.assertEqual(action["allowedBins"], ["cn"])
 
     def test_review_is_readonly(self):
         task = vlad.continue_task("Review the diff", readonly=True)
