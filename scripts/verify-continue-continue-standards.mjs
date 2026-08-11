@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 
 const failures = [];
@@ -20,6 +21,8 @@ const requiredFiles = [
   ".github/workflows/jetbrains-release.yaml",
   "docs/continue-continue/JUDGMENT_JARS.md",
   "docs/continue-continue/MODERNIZATION.md",
+  "scripts/tetsuya-decision-engine.mjs",
+  "scripts/tetsuya-decision-engine.test.mjs",
 ];
 requiredFiles.forEach(requireFile);
 
@@ -54,6 +57,13 @@ if (!vscodePublish.includes("github.event.inputs.publish_build == 'true'")) fail
 const jetbrainsPublish = read(".github/workflows/jetbrains-release.yaml");
 if (jetbrainsPublish.includes("on:\n  release:")) failures.push("JetBrains publication must not auto-trigger from prerelease events");
 if (!jetbrainsPublish.includes("workflow_dispatch:")) failures.push("JetBrains release workflow must retain an explicit manual trigger");
+
+try {
+  execFileSync(process.execPath, ["scripts/tetsuya-decision-engine.test.mjs"], { stdio: "pipe" });
+} catch (error) {
+  const detail = error?.stderr?.toString().trim() || error?.message || "unknown failure";
+  failures.push(`Tetsuya decision engine tests failed: ${detail}`);
+}
 
 if (failures.length) {
   console.error("Continue Continue standards check failed:\n" + failures.map((f) => `- ${f}`).join("\n"));
