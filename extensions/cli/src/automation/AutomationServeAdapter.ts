@@ -1,8 +1,8 @@
 import type { Express } from "express";
 
-import { BUILT_IN_TOOL_NAMES } from "../tools/builtInToolNames.js";
-import { messageQueue } from "../stream/messageQueue.js";
 import type { ServerState } from "../commands/serve.helpers.js";
+import { messageQueue } from "../stream/messageQueue.js";
+import { BUILT_IN_TOOL_NAMES } from "../tools/builtInToolNames.js";
 import { registerAutomationRoutes } from "./AutomationHttpService.js";
 import type { AutomationRuntime } from "./AutomationRuntime.js";
 

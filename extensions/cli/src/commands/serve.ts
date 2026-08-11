@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import type { ChatHistoryItem } from "core/index.js";
 import express, { Request, Response } from "express";
 
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
@@ -8,7 +7,6 @@ import { prependPrompt } from "src/util/promptProcessor.js";
 import { AutomationRuntime } from "../automation/AutomationRuntime.js";
 import { registerServeAutomationRoutes } from "../automation/AutomationServeAdapter.js";
 import { AutomationTaskStore } from "../automation/AutomationTaskStore.js";
-
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
 import { setAgentId } from "../index.js";
@@ -39,7 +37,6 @@ import { getGitDiffSnapshot } from "../util/git.js";
 import { logger } from "../util/logger.js";
 import { readStdinSync } from "../util/stdin.js";
 
-import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
 import {
   beginAutomationTurn,
   checkAgentComplete,
@@ -47,36 +44,14 @@ import {
   handleAutomationAbort,
   handleAutomationFailure,
   removePartialAssistantMessage,
+  shouldQueueInitialPrompt,
   streamChatResponseWithInterruption,
+  type ServeOptions,
   type ServerState,
 } from "./serve.helpers.js";
 
-interface ServeOptions extends ExtendedCommandOptions {
-  timeout?: string;
-  port?: string;
-  /** Storage identifier for remote sync */
-  id?: string;
-}
+export { shouldQueueInitialPrompt };
 
-/**
- * Decide whether to enqueue the initial prompt on server startup.
- * We only want to send it when starting a brand-new session; if any non-system
- * messages already exist (e.g., after resume), skip to avoid replaying.
- */
-export function shouldQueueInitialPrompt(
-  history: ChatHistoryItem[],
-  prompt?: string | null,
-): boolean {
-  if (!prompt) {
-    return false;
-  }
-
-  // If there are any non-system messages, we already have conversation context
-  const hasConversation = history.some(
-    (item) => item.message.role !== "system",
-  );
-  return !hasConversation;
-}
 
 // eslint-disable-next-line max-statements
 export async function serve(prompt?: string, options: ServeOptions = {}) {
