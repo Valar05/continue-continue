@@ -10,9 +10,9 @@ describe("AutomationHttpService", () => {
     const app = express();
     app.use(express.json());
     const runtime = new AutomationRuntime();
-    const enqueue = vi.fn(async () => {});
-    const cancelQueued = vi.fn(() => 1);
-    const abortActive = vi.fn(() => false);
+    const enqueue = vi.fn(async (_taskId: string, _prompt: string) => {});
+    const cancelQueued = vi.fn((_taskId: string) => 1);
+    const abortActive = vi.fn((_taskId: string) => false);
     registerAutomationRoutes(app, runtime, {
       enqueue,
       cancelQueued,
