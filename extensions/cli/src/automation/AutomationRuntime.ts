@@ -1,237 +1,45 @@
 import { randomUUID } from "node:crypto";
 
-export const AUTOMATION_TASK_MARKER = "continue-continue-machine-task";
-export const AUTOMATION_RECEIPT_MARKER = "continue-continue-receipt";
+import {
+  AUTOMATION_RECEIPT_MARKER,
+  AUTOMATION_TASK_MARKER,
+  AutomationInputError,
+  type AutomationAgentReceipt,
+  type AutomationReceipt,
+  type AutomationReceiptStatus,
+  type AutomationSnapshot,
+  type AutomationTaskInput,
+  type AutomationTaskRecord,
+  type AutomationToolEvent,
+} from "./AutomationTypes.js";
+import {
+  clone,
+  DOMAIN_RE,
+  lastEventSlice,
+  optionalText,
+  parseAgentReceipt,
+  safeContext,
+  stringList,
+  TASK_ID_RE,
+  taskIdFromMessage,
+  text,
+} from "./AutomationValidation.js";
 
-export type AutomationTaskStatus =
-  | "queued"
-  | "running"
-  | "blocked_permission"
-  | "awaiting_verification"
-  | "delegated"
-  | "completed"
-  | "blocked"
-  | "failed"
-  | "cancelled";
-
-export type AutomationReceiptStatus =
-  | "completed"
-  | "blocked"
-  | "delegated"
-  | "failed"
-  | "cancelled";
-
-export interface AutomationTaskInput {
-  taskId?: string;
-  actor?: string;
-  domain: string;
-  goal: string;
-  requestedOutcome?: string;
-  acceptanceCriteria?: string[];
-  constraints?: string[];
-  preferredTools?: string[];
-  lane?: string;
-  priority?: "low" | "normal" | "high";
-  context?: Record<string, unknown>;
-}
-
-export interface AutomationToolEvent {
-  at: number;
-  kind:
-    | "tool_start"
-    | "tool_result"
-    | "tool_error"
-    | "permission_required"
-    | "permission_resolved"
-    | "delegated";
-  toolName?: string;
-  status?: string;
-  detail?: string;
-  requestId?: string;
-}
-
-export interface AutomationAgentReceipt {
-  status: "completed" | "blocked" | "delegated" | "failed";
-  summary: string;
-  evidence?: string[];
-  error?: string;
-  delegateTarget?: string;
-}
-
-export interface AutomationReceipt {
-  taskId: string;
-  actor: string;
-  domain: string;
-  status: AutomationReceiptStatus;
-  requestedOutcome: string;
-  acceptanceCriteria: string[];
-  resultSummary?: string;
-  evidence: string[];
-  error?: string;
-  delegateTarget?: string;
-  toolEvents: AutomationToolEvent[];
-  createdAt: number;
-  startedAt?: number;
-  completedAt: number;
-}
-
-export interface AutomationTaskRecord {
-  taskId: string;
-  actor: string;
-  domain: string;
-  goal: string;
-  requestedOutcome: string;
-  acceptanceCriteria: string[];
-  constraints: string[];
-  preferredTools: string[];
-  lane?: string;
-  priority: "low" | "normal" | "high";
-  context?: Record<string, unknown>;
-  status: AutomationTaskStatus;
-  cancelRequested: boolean;
-  createdAt: number;
-  updatedAt: number;
-  startedAt?: number;
-  completedAt?: number;
-  currentTool?: string;
-  pendingPermissionRequestId?: string;
-  resultSummary?: string;
-  evidence: string[];
-  error?: string;
-  delegateTarget?: string;
-  toolEvents: AutomationToolEvent[];
-  receipt?: AutomationReceipt;
-}
-
-export interface AutomationSnapshot {
-  activeTaskId: string | null;
-  tasks: AutomationTaskRecord[];
-}
-
-export class AutomationInputError extends Error {}
-
-const TASK_ID_RE = /^[A-Za-z0-9_.:-]{3,160}$/;
-const DOMAIN_RE = /^[a-z][a-z0-9_-]{1,63}$/;
-const MAX_EVENTS = 64;
-const MAX_CONTEXT_BYTES = 32 * 1024;
-
-function text(value: unknown, label: string, max = 8000): string {
-  if (typeof value !== "string") {
-    throw new AutomationInputError(`${label} must be a string`);
-  }
-  const cleaned = value.trim();
-  if (!cleaned) {
-    throw new AutomationInputError(`${label} is required`);
-  }
-  if (cleaned.length > max) {
-    throw new AutomationInputError(`${label} exceeds ${max} characters`);
-  }
-  return cleaned;
-}
-
-function optionalText(
-  value: unknown,
-  label: string,
-  max = 8000,
-): string | undefined {
-  if (value === undefined || value === null || value === "") {
-    return undefined;
-  }
-  return text(value, label, max);
-}
-
-function stringList(
-  value: unknown,
-  label: string,
-  maxItems = 32,
-  maxItemLength = 1000,
-): string[] {
-  if (value === undefined || value === null) {
-    return [];
-  }
-  if (!Array.isArray(value)) {
-    throw new AutomationInputError(`${label} must be an array of strings`);
-  }
-  if (value.length > maxItems) {
-    throw new AutomationInputError(`${label} exceeds ${maxItems} items`);
-  }
-  return value.map((item, index) =>
-    text(item, `${label}[${index}]`, maxItemLength),
-  );
-}
-
-function safeContext(
-  value: unknown,
-): Record<string, unknown> | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new AutomationInputError("context must be an object");
-  }
-  const encoded = JSON.stringify(value);
-  if (Buffer.byteLength(encoded, "utf8") > MAX_CONTEXT_BYTES) {
-    throw new AutomationInputError(
-      `context exceeds ${MAX_CONTEXT_BYTES} bytes`,
-    );
-  }
-  return JSON.parse(encoded);
-}
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function taskIdFromMessage(message: string): string | null {
-  const marker = new RegExp(
-    `<${AUTOMATION_TASK_MARKER}\\s+id="([A-Za-z0-9_.:-]{3,160})">`,
-  );
-  return message.match(marker)?.[1] ?? null;
-}
-
-function lastEventSlice(
-  events: AutomationToolEvent[],
-): AutomationToolEvent[] {
-  return events.slice(Math.max(0, events.length - MAX_EVENTS));
-}
-
-function parseAgentReceipt(response: string): AutomationAgentReceipt | null {
-  const marker = new RegExp(
-    `<${AUTOMATION_RECEIPT_MARKER}>\\s*([\\s\\S]*?)\\s*</${AUTOMATION_RECEIPT_MARKER}>`,
-  );
-  const body = response.match(marker)?.[1];
-  if (!body) return null;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    throw new AutomationInputError(
-      "automation receipt marker contains invalid JSON",
-    );
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new AutomationInputError("automation receipt must be an object");
-  }
-  const candidate = parsed as Record<string, unknown>;
-  const status = candidate.status;
-  if (
-    !["completed", "blocked", "delegated", "failed"].includes(String(status))
-  ) {
-    throw new AutomationInputError("automation receipt has unsupported status");
-  }
-  return {
-    status: status as AutomationAgentReceipt["status"],
-    summary: text(candidate.summary, "receipt.summary", 12000),
-    evidence: stringList(candidate.evidence, "receipt.evidence", 32, 2000),
-    error: optionalText(candidate.error, "receipt.error", 4000),
-    delegateTarget: optionalText(
-      candidate.delegateTarget,
-      "receipt.delegateTarget",
-      500,
-    ),
-  };
-}
+export {
+  AUTOMATION_RECEIPT_MARKER,
+  AUTOMATION_TASK_MARKER,
+  AutomationInputError,
+} from "./AutomationTypes.js";
+export type {
+  AutomationAgentReceipt,
+  AutomationReceipt,
+  AutomationReceiptStatus,
+  AutomationSnapshot,
+  AutomationTaskInput,
+  AutomationTaskRecord,
+  AutomationTaskStatus,
+  AutomationToolEvent,
+} from "./AutomationTypes.js";
 
 export class AutomationRuntime {
   private tasks = new Map<string, AutomationTaskRecord>();
@@ -405,11 +213,7 @@ EXECUTION CONTRACT
     });
   }
 
-  markToolResult(
-    taskId: string,
-    toolName: string,
-    status: string,
-  ): void {
+  markToolResult(taskId: string, toolName: string, status: string): void {
     this.mutate(taskId, (task) => {
       task.currentTool = undefined;
       this.pushEvent(task, {
