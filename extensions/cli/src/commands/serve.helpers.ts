@@ -7,6 +7,14 @@ import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { StreamCallbacks } from "../stream/streamChatResponse.types.js";
 import { logger } from "../util/logger.js";
 
+import type { ExtendedCommandOptions } from "./BaseCommandOptions.js";
+
+export interface ServeOptions extends ExtendedCommandOptions {
+  timeout?: string;
+  port?: string;
+  id?: string;
+}
+
 export function shouldQueueInitialPrompt(
   history: ChatHistoryItem[],
   prompt?: string | null,
