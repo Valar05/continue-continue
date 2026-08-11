@@ -93,7 +93,11 @@ describe("AutomationRuntime", () => {
     });
 
     runtime.markRunning(task.taskId);
-    runtime.markPermissionBlocked(task.taskId, "render.video", "permission-123");
+    runtime.markPermissionBlocked(
+      task.taskId,
+      "render.video",
+      "permission-123",
+    );
     expect(runtime.getTask(task.taskId)?.status).toBe("blocked_permission");
 
     runtime.markPermissionResolved(task.taskId, "permission-123", true);
@@ -128,9 +132,9 @@ describe("AutomationRuntime", () => {
     expect(() =>
       runtime.createTask({ domain: "Video Render", goal: "Render it" }),
     ).toThrow(AutomationInputError);
-    expect(() =>
-      runtime.createTask({ domain: "video", goal: "   " }),
-    ).toThrow(AutomationInputError);
+    expect(() => runtime.createTask({ domain: "video", goal: "   " })).toThrow(
+      AutomationInputError,
+    );
   });
 
   it("restores task records for long-lived serve sessions", () => {

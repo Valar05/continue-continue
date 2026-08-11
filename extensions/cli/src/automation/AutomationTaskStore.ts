@@ -20,7 +20,9 @@ export class AutomationTaskStore {
     if (!fs.existsSync(dir)) return [];
 
     const tasks: AutomationTaskRecord[] = [];
-    for (const name of fs.readdirSync(dir).filter((entry) => entry.endsWith(".json"))) {
+    for (const name of fs
+      .readdirSync(dir)
+      .filter((entry) => entry.endsWith(".json"))) {
       try {
         const parsed = JSON.parse(
           fs.readFileSync(path.join(dir, name), "utf8"),

@@ -43,7 +43,9 @@ export function registerAutomationRoutes(
     try {
       const task = runtime.createTask(req.body as AutomationTaskInput);
       await hooks.enqueue(task.taskId, runtime.renderTaskPrompt(task.taskId));
-      res.status(202).json({ queued: true, task: runtime.getTask(task.taskId) });
+      res
+        .status(202)
+        .json({ queued: true, task: runtime.getTask(task.taskId) });
     } catch (error) {
       const status = error instanceof AutomationInputError ? 400 : 500;
       res.status(status).json({
@@ -86,7 +88,11 @@ export function registerAutomationRoutes(
       const aborted = hooks.abortActive(id);
       const task = runtime.requestCancel(id);
       if (aborted) runtime.markCancelled(id);
-      res.json({ removedFromQueue: removed, aborted, task: runtime.getTask(id) ?? task });
+      res.json({
+        removedFromQueue: removed,
+        aborted,
+        task: runtime.getTask(id) ?? task,
+      });
     },
   );
 }

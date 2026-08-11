@@ -29,12 +29,14 @@ describe("AutomationHttpService", () => {
 
   it("queues a typed machine task without granting tool permission", async () => {
     const { app, enqueue } = harness();
-    const response = await request(app).post("/automation/tasks").send({
-      taskId: "venice-http-001",
-      domain: "audio",
-      goal: "Render ambience.",
-      preferredTools: ["media.create"],
-    });
+    const response = await request(app)
+      .post("/automation/tasks")
+      .send({
+        taskId: "venice-http-001",
+        domain: "audio",
+        goal: "Render ambience.",
+        preferredTools: ["media.create"],
+      });
 
     expect(response.status).toBe(202);
     expect(response.body.task.status).toBe("queued");

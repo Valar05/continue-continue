@@ -60,7 +60,8 @@ export function beginAutomationTurn(
   queuedMessage: Pick<QueuedMessage, "message" | "automationTaskId">,
 ): BeginAutomationTurnResult {
   const taskId =
-    queuedMessage.automationTaskId ?? runtime.extractTaskId(queuedMessage.message);
+    queuedMessage.automationTaskId ??
+    runtime.extractTaskId(queuedMessage.message);
   if (taskId && runtime.shouldSkip(taskId)) {
     return { taskId, skip: true };
   }
@@ -145,11 +146,7 @@ export async function streamChatResponseWithInterruption(
     },
     onToolError: (error: string, toolName?: string) => {
       if (automation) {
-        automation.runtime.markToolError(
-          automation.taskId,
-          toolName,
-          error,
-        );
+        automation.runtime.markToolError(automation.taskId, toolName, error);
       }
     },
     onToolPermissionRequest: (

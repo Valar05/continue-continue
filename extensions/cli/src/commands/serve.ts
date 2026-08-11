@@ -53,7 +53,6 @@ import {
 
 export { shouldQueueInitialPrompt };
 
-
 // eslint-disable-next-line max-statements
 export async function serve(prompt?: string, options: ServeOptions = {}) {
   // Set agent ID for error reporting if provided
