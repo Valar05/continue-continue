@@ -6,6 +6,9 @@ survival/operator surface: natural-language one shots, a tiny REPL, deterministi
 phone shortcuts, and an explicit Continue coding seam. It never bypasses the
 edge permission gates; even explicit code/phone commands are merely authority
 packets that the edge may block.
+
+The canonical default Continue argv begins ["cn", "-p"]. VLAD_CN_BIN may
+replace only the executable path; policy checks operate on its basename.
 """
 
 from __future__ import annotations
