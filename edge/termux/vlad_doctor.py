@@ -21,6 +21,7 @@ DEFAULT_PHONE_ASK = "/data/data/com.termux/files/usr/local/bin/home-center-phone
 DEFAULT_EDGE_BIN = "/data/data/com.termux/files/usr/local/bin/continue-continue-vlad"
 DEFAULT_INTERNAL_EDGE_BIN = "/data/data/com.termux/files/usr/local/bin/continue-continue-vlad-edge"
 DEFAULT_ROUTING_SHEET = "/data/data/com.termux/files/usr/etc/continue-continue/routes.csv"
+DEFAULT_ALLOWED_BINS = "cn,git,ffmpeg,ffprobe,python,python3,node,npm,npx,rg,grep,find,ls,pwd,cat,mkdir,cp"
 VALID_ROUTES = {"phone_hands", "shell", "delegate", "blocked", "passthrough"}
 ROUTING_COLUMNS = {
     "priority",
@@ -35,7 +36,7 @@ ROUTING_COLUMNS = {
     "phone_prompt",
     "reason",
 }
-KNOWN_REQUIREMENTS = {"phone_hands", "upstream", "qwen"}
+KNOWN_REQUIREMENTS = {"continue", "phone_hands", "upstream", "qwen"}
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,14 @@ def _writable_directory(path: pathlib.Path) -> tuple[bool, str]:
 def _executable(path: str) -> bool:
     target = pathlib.Path(path)
     return target.is_file() and os.access(target, os.X_OK)
+
+
+def _command_path(command: str, env: Mapping[str, str]) -> str | None:
+    expanded = os.path.expanduser(command)
+    candidate = pathlib.Path(expanded)
+    if candidate.is_absolute() or "/" in command:
+        return str(candidate) if _executable(str(candidate)) else None
+    return shutil.which(command, path=env.get("PATH"))
 
 
 def _routing_sheet(path: str) -> tuple[bool, str]:
@@ -163,6 +172,40 @@ def diagnose(
     sheet = env.get("VLAD_ROUTING_SHEET", DEFAULT_ROUTING_SHEET)
     sheet_ok, sheet_detail = _routing_sheet(sheet)
     checks.append(Check("routing_sheet", sheet_ok, True, sheet_detail))
+
+    continue_required = "continue" in requirements
+    cn_command = env.get("VLAD_CN_BIN", "cn")
+    cn_path = _command_path(cn_command, env)
+    cn_name = pathlib.Path(cn_command).name
+    shell_policy = set(
+        filter(None, env.get("VLAD_ALLOWED_BINS", DEFAULT_ALLOWED_BINS).split(","))
+    )
+    continue_gate_ok = _enabled(env, "VLAD_ALLOW_LOCAL_EXEC")
+    continue_policy_ok = cn_name in shell_policy
+    checks.append(
+        Check(
+            "continue_binary",
+            bool(cn_path),
+            continue_required,
+            cn_path or f"not found: {cn_command}",
+        )
+    )
+    checks.append(
+        Check(
+            "continue_permission",
+            continue_gate_ok,
+            continue_required,
+            "VLAD_ALLOW_LOCAL_EXEC=" + ("1" if continue_gate_ok else "0"),
+        )
+    )
+    checks.append(
+        Check(
+            "continue_policy",
+            continue_policy_ok,
+            continue_required,
+            f"{cn_name} " + ("allowed" if continue_policy_ok else "excluded") + " by VLAD_ALLOWED_BINS",
+        )
+    )
 
     phone_required = "phone_hands" in requirements
     phone_bin = env.get("PHONE_ASK_BIN", DEFAULT_PHONE_ASK)
