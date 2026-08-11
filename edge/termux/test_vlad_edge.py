@@ -69,6 +69,77 @@ class VladEdgeTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         self.assertIn("gate:VLAD_ALLOW_LOCAL_EXEC=0", result["evidence"])
 
+    def test_task_allowed_bins_cannot_enlarge_global_policy(self):
+        with mock.patch.dict(
+            os.environ,
+            {"VLAD_ALLOW_LOCAL_EXEC": "1", "VLAD_ALLOWED_BINS": "git,python3"},
+        ):
+            record = vlad.create_record(
+                self.task(
+                    taskId="vlad-shell-narrow-001",
+                    context={
+                        "edge": {
+                            "action": {
+                                "kind": "shell",
+                                "argv": ["cn", "-p", "review"],
+                                "allowedBins": ["cn"],
+                            }
+                        }
+                    },
+                )
+            )
+            result = vlad.execute(record)
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("allowed_bins:", result["evidence"])
+
+    def test_task_allowed_bins_can_narrow_broader_policy(self):
+        with mock.patch.dict(
+            os.environ,
+            {"VLAD_ALLOW_LOCAL_EXEC": "1", "VLAD_ALLOWED_BINS": "cn,git"},
+        ):
+            record = vlad.create_record(
+                self.task(
+                    taskId="vlad-shell-narrow-002",
+                    context={
+                        "edge": {
+                            "action": {
+                                "kind": "shell",
+                                "argv": ["git", "status"],
+                                "allowedBins": ["cn"],
+                            }
+                        }
+                    },
+                )
+            )
+            result = vlad.execute(record)
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["evidence"], ["allowed_bins:cn"])
+
+    def test_task_allowed_bins_executes_only_intersection(self):
+        completed = mock.MagicMock(returncode=0, stdout="reviewed", stderr="")
+        with mock.patch.dict(
+            os.environ,
+            {"VLAD_ALLOW_LOCAL_EXEC": "1", "VLAD_ALLOWED_BINS": "cn,git"},
+        ), mock.patch("subprocess.run", return_value=completed) as run:
+            record = vlad.create_record(
+                self.task(
+                    taskId="vlad-shell-narrow-003",
+                    context={
+                        "edge": {
+                            "action": {
+                                "kind": "shell",
+                                "argv": ["cn", "-p", "--readonly", "review"],
+                                "allowedBins": ["cn"],
+                            }
+                        }
+                    },
+                )
+            )
+            result = vlad.execute(record)
+        self.assertEqual(result["status"], "completed")
+        self.assertIn("shell:allowed_bins=cn", result["evidence"])
+        run.assert_called_once()
+
     def test_delegation_preserves_task_id_and_is_not_completion(self):
         response = {"queued": True, "task": {"taskId": "vlad-delegate-001"}}
         fake = mock.MagicMock()
