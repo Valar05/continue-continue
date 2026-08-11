@@ -113,6 +113,14 @@ class VladRouterTests(unittest.TestCase):
                 self.assertEqual(decision["route"], expected_route)
                 self.assertEqual(task["domain"], expected_domain)
 
+    def test_public_exit_code_contract(self):
+        self.assertEqual(router.exit_code_for_status("completed"), 0)
+        self.assertEqual(router.exit_code_for_status("delegated"), 0)
+        self.assertEqual(router.exit_code_for_status("blocked"), 3)
+        self.assertEqual(router.exit_code_for_status("failed"), 4)
+        self.assertEqual(router.exit_code_for_status("cancelled"), 4)
+        self.assertEqual(router.exit_code_for_status("awaiting_verification"), 5)
+
 
 if __name__ == "__main__":
     unittest.main()
