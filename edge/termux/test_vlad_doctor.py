@@ -48,7 +48,7 @@ class VladDoctorTests(unittest.TestCase):
         edge = self.executable(bin_dir, "continue-continue-vlad")
         internal = self.executable(bin_dir, "continue-continue-vlad-edge")
         phone = self.executable(bin_dir, "home-center-phone-ask")
-        for name in ("git", "python3", "ffmpeg", "ffprobe", "rg"):
+        for name in ("cn", "git", "python3", "ffmpeg", "ffprobe", "rg"):
             self.executable(bin_dir, name)
         return {
             "CONTINUE_CONTINUE_EDGE_DIR": str(root / "state"),
@@ -57,6 +57,7 @@ class VladDoctorTests(unittest.TestCase):
             "VLAD_ROUTING_SHEET": self.routing_sheet(root),
             "PHONE_ASK_BIN": phone,
             "VLAD_ALLOW_PHONE_HANDS": "1",
+            "VLAD_ALLOW_LOCAL_EXEC": "0",
             "PATH": str(bin_dir),
         }
 
@@ -74,6 +75,30 @@ class VladDoctorTests(unittest.TestCase):
             report = doctor.diagnose(env, {"phone_hands"})
             self.assertFalse(report["ready"])
             self.assertIn("phone_hands_permission", report["requiredFailures"])
+
+    def test_continue_required_and_ready(self):
+        with tempfile.TemporaryDirectory() as temp:
+            env = self.base_env(pathlib.Path(temp))
+            env["VLAD_ALLOW_LOCAL_EXEC"] = "1"
+            report = doctor.diagnose(env, {"continue"})
+            self.assertTrue(report["ready"])
+            self.assertEqual(report["requiredFailures"], [])
+
+    def test_continue_requires_local_exec_permission(self):
+        with tempfile.TemporaryDirectory() as temp:
+            env = self.base_env(pathlib.Path(temp))
+            report = doctor.diagnose(env, {"continue"})
+            self.assertFalse(report["ready"])
+            self.assertIn("continue_permission", report["requiredFailures"])
+
+    def test_continue_respects_global_binary_policy(self):
+        with tempfile.TemporaryDirectory() as temp:
+            env = self.base_env(pathlib.Path(temp))
+            env["VLAD_ALLOW_LOCAL_EXEC"] = "1"
+            env["VLAD_ALLOWED_BINS"] = "git,python3"
+            report = doctor.diagnose(env, {"continue"})
+            self.assertFalse(report["ready"])
+            self.assertIn("continue_policy", report["requiredFailures"])
 
     def test_missing_routing_sheet_blocks_readiness(self):
         with tempfile.TemporaryDirectory() as temp:
