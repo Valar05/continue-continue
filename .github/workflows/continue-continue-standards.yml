@@ -17,5 +17,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-      - name: Verify Continue Continue standards
+      - name: Verify repository doctrine and local-first starter
         run: node scripts/verify-continue-continue-standards.mjs
