@@ -262,7 +262,7 @@ def run_shell(record: dict[str, Any], route: dict[str, Any]) -> dict[str, Any]:
     argv = action.get("argv")
     if not isinstance(argv, list) or not argv or not all(isinstance(x, str) and x for x in argv):
         return finish(record, "blocked", "Explicit shell action requires argv as a non-empty string array.", ["contract:edge.action.argv"])
-    allowed = set(filter(None, os.environ.get("VLAD_ALLOWED_BINS", "git,ffmpeg,ffprobe,python,python3,node,npm,npx,rg,grep,find,ls,pwd,cat,mkdir,cp").split(",")))
+    allowed = set(filter(None, os.environ.get("VLAD_ALLOWED_BINS", "cn,git,ffmpeg,ffprobe,python,python3,node,npm,npx,rg,grep,find,ls,pwd,cat,mkdir,cp").split(",")))
     binary = pathlib.Path(argv[0]).name
     if binary not in allowed:
         return finish(record, "blocked", f"Binary {binary} is not allowed by Vlad edge policy.", [f"allowed_bins:{','.join(sorted(allowed))}"])
