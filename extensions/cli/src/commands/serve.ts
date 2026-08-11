@@ -2,12 +2,12 @@ import chalk from "chalk";
 import type { ChatHistoryItem } from "core/index.js";
 import express, { Request, Response } from "express";
 
-import { registerAutomationRoutes } from "../automation/AutomationHttpService.js";
-import { AutomationRuntime } from "../automation/AutomationRuntime.js";
-import { AutomationTaskStore } from "../automation/AutomationTaskStore.js";
-
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
 import { prependPrompt } from "src/util/promptProcessor.js";
+
+import { AutomationRuntime } from "../automation/AutomationRuntime.js";
+import { registerServeAutomationRoutes } from "../automation/AutomationServeAdapter.js";
+import { AutomationTaskStore } from "../automation/AutomationTaskStore.js";
 
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
@@ -32,7 +32,6 @@ import {
 import { messageQueue } from "../stream/messageQueue.js";
 import { constructSystemMessage } from "../systemMessage.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
-import { BUILT_IN_TOOL_NAMES } from "../tools/builtInToolNames.js";
 import { reportFailureTool } from "../tools/reportFailure.js";
 import { gracefulExit, updateAgentMetadata } from "../util/exit.js";
 import { formatError } from "../util/formatError.js";
@@ -42,7 +41,11 @@ import { readStdinSync } from "../util/stdin.js";
 
 import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
 import {
+  beginAutomationTurn,
   checkAgentComplete,
+  completeAutomationTurn,
+  handleAutomationAbort,
+  handleAutomationFailure,
   removePartialAssistantMessage,
   streamChatResponseWithInterruption,
   type ServerState,
@@ -223,26 +226,8 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
   const app = express();
   app.use(express.json());
 
-  registerAutomationRoutes(app, automationRuntime, {
-    enqueue: async (taskId, taskPrompt) => {
-      await messageQueue.enqueueMessage(taskPrompt, undefined, undefined, taskId);
-      if (!state.isProcessing) void processMessages(state, llmApi);
-    },
-    cancelQueued: (taskId) => messageQueue.removeAutomationTask(taskId),
-    activeTaskId: () => state.activeAutomationTaskId,
-    abortActive: (taskId) => {
-      if (state.activeAutomationTaskId !== taskId) return false;
-      state.currentAbortController?.abort();
-      return true;
-    },
-    capabilities: () => ({
-      runtime: "full",
-      domains: "open",
-      builtInTools: [...BUILT_IN_TOOL_NAMES],
-      notes: [
-        "Configured MCP, Home Center, media, game, and other external tools remain explicit permission-gated executors.",
-      ],
-    }),
+  registerServeAutomationRoutes(app, state, automationRuntime, () => {
+    void processMessages(state, llmApi);
   });
 
   // GET /state - Return the current state
@@ -502,13 +487,13 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       }
 
       const userMessage = queuedMessage.message;
-      const automationTaskId =
-        queuedMessage.automationTaskId ?? automationRuntime.extractTaskId(userMessage);
-      if (automationTaskId && automationRuntime.shouldSkip(automationTaskId)) {
-        continue;
-      }
-      state.activeAutomationTaskId = automationTaskId;
-      if (automationTaskId) automationRuntime.markRunning(automationTaskId);
+      const automationTurn = beginAutomationTurn(
+        state,
+        automationRuntime,
+        queuedMessage,
+      );
+      if (automationTurn.skip) continue;
+      const automationTaskId = automationTurn.taskId;
       state.isProcessing = true;
       state.lastActivity = Date.now();
       processedMessage = true;
@@ -539,17 +524,7 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
             : undefined,
         );
 
-        if (automationTaskId) {
-          const task = automationRuntime.getTask(automationTaskId);
-          if (task?.cancelRequested) {
-            automationRuntime.markCancelled(automationTaskId);
-          } else if (
-            task &&
-            !["blocked", "cancelled", "failed"].includes(task.status)
-          ) {
-            automationRuntime.applyAgentResponse(automationTaskId, response);
-          }
-        }
+        completeAutomationTurn(automationRuntime, automationTaskId, response);
 
         // No direct persistence here; ChatHistoryService handles persistence when appropriate
 
@@ -572,22 +547,14 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
         if (e.name === "AbortError") {
           logger.debug("Response interrupted");
           removePartialAssistantMessage(state.session.history);
-          if (automationTaskId) {
-            const task = automationRuntime.getTask(automationTaskId);
-            if (task?.cancelRequested) {
-              automationRuntime.markCancelled(automationTaskId);
-            } else if (
-              task &&
-              !["blocked", "blocked_permission", "cancelled"].includes(task.status)
-            ) {
-              automationRuntime.markPaused(automationTaskId);
-            }
-          }
+          handleAutomationAbort(automationRuntime, automationTaskId);
         } else {
           logger.error(`Error: ${formatError(e)}`);
-          if (automationTaskId) {
-            automationRuntime.markFailed(automationTaskId, formatError(e));
-          }
+          handleAutomationFailure(
+            automationRuntime,
+            automationTaskId,
+            formatError(e),
+          );
 
           // Add error message via ChatHistoryService
           const errorMessage = `Error: ${formatError(e)}`;
