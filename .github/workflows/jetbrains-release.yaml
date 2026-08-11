@@ -5,8 +5,7 @@
 name: JetBrains Release
 
 on:
-  release:
-    types: [prereleased]
+  # Fork policy: marketplace publication is always an explicit manual action.
   workflow_dispatch:
     inputs:
       build_only:
