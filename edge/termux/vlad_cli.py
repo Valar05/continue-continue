@@ -20,6 +20,7 @@ import uuid
 from typing import Any
 
 SCHEMA = "continue-continue.vlad-cli.v1"
+DOCTOR_REQUIREMENTS = ("continue", "phone_hands", "qwen", "upstream")
 
 
 def here() -> pathlib.Path:
@@ -86,7 +87,8 @@ def continue_task(
     if readonly and auto:
         raise ValueError("Continue task cannot be both readonly and auto")
     task = base_task(prompt, "code")
-    argv = [os.environ.get("VLAD_CN_BIN", "cn"), "-p"]
+    configured_cn = os.environ.get("VLAD_CN_BIN", "cn")
+    argv = [configured_cn, "-p"]
     if readonly:
         argv.append("--readonly")
     if auto:
@@ -94,18 +96,30 @@ def continue_task(
     if resume:
         argv.append("--resume")
     argv.append(task["goal"])
-    task["context"]["edge"] = {"action": {"kind": "shell", "argv": argv}}
+    # allowedBins is a per-task *narrowing* request. The edge intersects it with
+    # its governing VLAD_ALLOWED_BINS policy, so this can never grant cn when
+    # the global policy excludes it.
+    task["context"]["edge"] = {
+        "action": {
+            "kind": "shell",
+            "argv": argv,
+            "allowedBins": [pathlib.Path(configured_cn).name],
+        }
+    }
     task["context"]["vladCli"].update(
         {"surface": "continue", "readonly": readonly, "auto": auto, "resume": resume}
     )
     task["constraints"] = [
         "Continue is the requested coding organ; do not substitute another coding agent.",
+        "This task narrows shell authority to the configured Continue binary only.",
         "Completion requires the edge receipt; a model turn alone is not deployment evidence.",
     ]
     return task
 
 
-def invoke_machine(mode: str, payload: dict[str, Any], *, capture: bool = True) -> subprocess.CompletedProcess[str]:
+def invoke_machine(
+    mode: str, payload: dict[str, Any], *, capture: bool = True
+) -> subprocess.CompletedProcess[str]:
     command = [*machine_command(), mode, "-"]
     return subprocess.run(
         command,
@@ -131,13 +145,13 @@ def receipt_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def render_human(payload: dict[str, Any]) -> str:
     receipt = receipt_from_payload(payload)
-    status = str(receipt.get("status") or payload.get("status") or "unknown")
+    status_value = str(receipt.get("status") or payload.get("status") or "unknown")
     summary = str(receipt.get("resultSummary") or payload.get("resultSummary") or "")
     route = payload.get("routing")
     route_text = ""
     if isinstance(route, dict):
         route_text = str(route.get("route") or "")
-    lines = [f"[{status}]" + (f" route={route_text}" if route_text else "")]
+    lines = [f"[{status_value}]" + (f" route={route_text}" if route_text else "")]
     if summary:
         lines.append(summary)
     evidence = receipt.get("evidence")
@@ -186,6 +200,30 @@ def route_request(request: str, *, json_output: bool = True) -> int:
     return completed.returncode
 
 
+def run_doctor(requirements: list[str], *, json_output: bool) -> int:
+    command = doctor_command()
+    for requirement in requirements:
+        command.extend(["--require", requirement])
+    if not json_output:
+        command.append("--pretty")
+    completed = subprocess.run(command, text=True, capture_output=True, check=False)
+    if completed.stdout:
+        sys.stdout.write(completed.stdout)
+    if completed.stderr:
+        sys.stderr.write(completed.stderr)
+    return 0 if completed.returncode == 0 else (3 if completed.returncode == 2 else completed.returncode)
+
+
+def _doctor_check(payload: dict[str, Any], name: str) -> dict[str, Any] | None:
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return None
+    for check in checks:
+        if isinstance(check, dict) and check.get("name") == name:
+            return check
+    return None
+
+
 def status(json_output: bool) -> int:
     doctor = subprocess.run(doctor_command(), text=True, capture_output=True, check=False)
     caps = subprocess.run(
@@ -198,6 +236,9 @@ def status(json_output: bool) -> int:
     caps_payload = parse_json_output(caps.stdout) or {
         "error": caps.stderr.strip() or caps.stdout.strip()
     }
+    continue_binary = _doctor_check(doctor_payload, "continue_binary") or {}
+    continue_policy = _doctor_check(doctor_payload, "continue_policy") or {}
+    continue_permission = _doctor_check(doctor_payload, "continue_permission") or {}
     payload = {
         "schema": SCHEMA,
         "ready": bool(doctor_payload.get("ready")),
@@ -205,8 +246,10 @@ def status(json_output: bool) -> int:
         "capabilities": caps_payload,
         "continue": {
             "configuredBinary": os.environ.get("VLAD_CN_BIN", "cn"),
-            "executionGate": os.environ.get("VLAD_ALLOW_LOCAL_EXEC", "0") == "1",
-            "note": "Code/review still passes through Vlad edge shell policy; the CLI does not grant execution authority.",
+            "available": bool(continue_binary.get("ok")),
+            "policyAllowed": bool(continue_policy.get("ok")),
+            "executionGate": bool(continue_permission.get("ok")),
+            "note": "Code/review uses per-task allowedBins narrowing and still requires the governing Vlad edge policy and local-exec gate.",
         },
     }
     if json_output:
@@ -220,6 +263,16 @@ def status(json_output: bool) -> int:
         print(
             "local_exec="
             + str((caps_payload.get("localExec") or {}).get("enabled", False)).lower()
+        )
+        print(
+            "continue="
+            + (
+                "ready"
+                if payload["continue"]["available"]
+                and payload["continue"]["policyAllowed"]
+                and payload["continue"]["executionGate"]
+                else "not-ready"
+            )
         )
         print(
             "qwen_router="
@@ -241,7 +294,7 @@ def repl() -> int:
         if text in {"/quit", "/exit"}:
             return 0
         if text == "/doctor":
-            status(False)
+            run_doctor([], json_output=False)
             continue
         if text.startswith("/route "):
             route_request(text[7:].strip(), json_output=False)
@@ -263,7 +316,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     sub = parser.add_subparsers(dest="command")
 
-    sub.add_parser("doctor", help="show readiness and exit 3 when blocked")
+    doctor = sub.add_parser("doctor", help="show readiness and exit 3 when blocked")
+    doctor.add_argument(
+        "--require",
+        action="append",
+        choices=DOCTOR_REQUIREMENTS,
+        default=[],
+        help="capability that must be runnable; may be repeated",
+    )
     sub.add_parser("status", help="show readiness plus configured organs")
 
     route = sub.add_parser("route", help="preview spreadsheet routing without execution")
@@ -307,10 +367,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     json_output = bool(args.json)
-    if args.command in {"doctor", "status"}:
+    if args.command == "doctor":
+        return run_doctor(args.require, json_output=json_output)
+    if args.command == "status":
         return status(json_output)
     if args.command == "route":
-        return route_request(" ".join(args.request), json_output=True if json_output else False)
+        return route_request(" ".join(args.request), json_output=json_output)
     if args.command in {"run", "ask"}:
         return run_task({"request": " ".join(args.request)}, json_output=json_output)
     if args.command == "phone":
