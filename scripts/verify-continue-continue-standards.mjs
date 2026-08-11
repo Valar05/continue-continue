@@ -15,6 +15,9 @@ const requiredFiles = [
   ".continue/checks/evidence-receipt.md",
   ".continue/checks/ravenholm.md",
   ".continue/checks/local-first.md",
+  ".github/workflows/docs-gh-pages.yml",
+  ".github/workflows/main.yaml",
+  ".github/workflows/jetbrains-release.yaml",
   "docs/continue-continue/JUDGMENT_JARS.md",
   "docs/continue-continue/MODERNIZATION.md",
 ];
@@ -38,6 +41,19 @@ for (const path of requiredFiles.filter((p) => p.startsWith(".continue/checks/")
     failures.push(`Continue check is missing expected frontmatter: ${path}`);
   }
 }
+
+const docsPublish = read(".github/workflows/docs-gh-pages.yml");
+if (docsPublish.includes("on:\n  push:")) failures.push("docs publication must not auto-trigger on push");
+if (!docsPublish.includes("workflow_dispatch:")) failures.push("docs publication must retain an explicit manual trigger");
+
+const vscodePublish = read(".github/workflows/main.yaml");
+if (vscodePublish.includes("on:\n  release:")) failures.push("VS Code publication must not auto-trigger from GitHub release events");
+if (vscodePublish.includes("repository: continuedev/continue")) failures.push("VS Code publication must never target the upstream repository");
+if (!vscodePublish.includes("github.event.inputs.publish_build == 'true'")) failures.push("VS Code publication must require explicit publish_build=true authorization");
+
+const jetbrainsPublish = read(".github/workflows/jetbrains-release.yaml");
+if (jetbrainsPublish.includes("on:\n  release:")) failures.push("JetBrains publication must not auto-trigger from prerelease events");
+if (!jetbrainsPublish.includes("workflow_dispatch:")) failures.push("JetBrains release workflow must retain an explicit manual trigger");
 
 if (failures.length) {
   console.error("Continue Continue standards check failed:\n" + failures.map((f) => `- ${f}`).join("\n"));
