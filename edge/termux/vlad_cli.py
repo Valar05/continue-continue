@@ -282,7 +282,8 @@ def status(json_output: bool) -> int:
 
 
 def repl() -> int:
-    print("Vlad local. /quit exits; /doctor, /route, /code, /review are available.")
+    print("Vlad local. /quit exits; /doctor, /route, /code, /review, /new are available.")
+    continue_session_started = False
     while True:
         try:
             line = input("vlad> ")
@@ -296,14 +297,30 @@ def repl() -> int:
         if text == "/doctor":
             run_doctor([], json_output=False)
             continue
+        if text == "/new":
+            continue_session_started = False
+            print("Continue session reset; next /code or /review starts a fresh headless session.")
+            continue
         if text.startswith("/route "):
             route_request(text[7:].strip(), json_output=False)
             continue
         if text.startswith("/code "):
-            run_task(continue_task(text[6:].strip()), json_output=False)
+            code = run_task(
+                continue_task(text[6:].strip(), resume=continue_session_started),
+                json_output=False,
+            )
+            if code == 0:
+                continue_session_started = True
             continue
         if text.startswith("/review "):
-            run_task(continue_task(text[8:].strip(), readonly=True), json_output=False)
+            code = run_task(
+                continue_task(
+                    text[8:].strip(), readonly=True, resume=continue_session_started
+                ),
+                json_output=False,
+            )
+            if code == 0:
+                continue_session_started = True
             continue
         run_task({"request": text}, json_output=False)
 
