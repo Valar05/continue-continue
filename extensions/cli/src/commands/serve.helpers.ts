@@ -2,6 +2,7 @@ import type { ChatHistoryItem, Session, ToolStatus } from "core/index.js";
 
 import type { AutomationRuntime } from "../automation/AutomationRuntime.js";
 import { services } from "../services/index.js";
+import type { QueuedMessage } from "../stream/messageQueue.js";
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { StreamCallbacks } from "../stream/streamChatResponse.types.js";
 import { logger } from "../util/logger.js";
@@ -30,6 +31,67 @@ export function removePartialAssistantMessage(
 export interface AutomationTurnContext {
   runtime: AutomationRuntime;
   taskId: string;
+}
+
+export interface BeginAutomationTurnResult {
+  taskId: string | null;
+  skip: boolean;
+}
+
+export function beginAutomationTurn(
+  state: ServerState,
+  runtime: AutomationRuntime,
+  queuedMessage: Pick<QueuedMessage, "message" | "automationTaskId">,
+): BeginAutomationTurnResult {
+  const taskId =
+    queuedMessage.automationTaskId ?? runtime.extractTaskId(queuedMessage.message);
+  if (taskId && runtime.shouldSkip(taskId)) {
+    return { taskId, skip: true };
+  }
+  state.activeAutomationTaskId = taskId;
+  if (taskId) runtime.markRunning(taskId);
+  return { taskId, skip: false };
+}
+
+export function completeAutomationTurn(
+  runtime: AutomationRuntime,
+  taskId: string | null,
+  response: string,
+): void {
+  if (!taskId) return;
+  const task = runtime.getTask(taskId);
+  if (task?.cancelRequested) {
+    runtime.markCancelled(taskId);
+  } else if (
+    task &&
+    !["blocked", "cancelled", "failed"].includes(task.status)
+  ) {
+    runtime.applyAgentResponse(taskId, response);
+  }
+}
+
+export function handleAutomationAbort(
+  runtime: AutomationRuntime,
+  taskId: string | null,
+): void {
+  if (!taskId) return;
+  const task = runtime.getTask(taskId);
+  if (task?.cancelRequested) {
+    runtime.markCancelled(taskId);
+  } else if (
+    task &&
+    !["blocked", "blocked_permission", "cancelled"].includes(task.status)
+  ) {
+    runtime.markPaused(taskId);
+  }
+}
+
+export function handleAutomationFailure(
+  runtime: AutomationRuntime,
+  taskId: string | null,
+  error: string,
+): void {
+  if (taskId) runtime.markFailed(taskId, error);
 }
 
 export async function streamChatResponseWithInterruption(
