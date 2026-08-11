@@ -2,6 +2,10 @@ import chalk from "chalk";
 import type { ChatHistoryItem } from "core/index.js";
 import express, { Request, Response } from "express";
 
+import { registerAutomationRoutes } from "../automation/AutomationHttpService.js";
+import { AutomationRuntime } from "../automation/AutomationRuntime.js";
+import { AutomationTaskStore } from "../automation/AutomationTaskStore.js";
+
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
 import { prependPrompt } from "src/util/promptProcessor.js";
 
@@ -28,6 +32,7 @@ import {
 import { messageQueue } from "../stream/messageQueue.js";
 import { constructSystemMessage } from "../systemMessage.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
+import { BUILT_IN_TOOL_NAMES } from "../tools/builtInToolNames.js";
 import { reportFailureTool } from "../tools/reportFailure.js";
 import { gracefulExit, updateAgentMetadata } from "../util/exit.js";
 import { formatError } from "../util/formatError.js";
@@ -170,7 +175,14 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     currentAbortController: null,
     serverRunning: true,
     pendingPermission: null,
+    activeAutomationTaskId: null,
   };
+
+  const automationStore = new AutomationTaskStore();
+  const automationRuntime = new AutomationRuntime(
+    automationStore.loadAll(),
+    (tasks) => automationStore.saveAll(tasks),
+  );
 
   const syncSessionHistory = () => {
     try {
@@ -210,6 +222,28 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
 
   const app = express();
   app.use(express.json());
+
+  registerAutomationRoutes(app, automationRuntime, {
+    enqueue: async (taskId, taskPrompt) => {
+      await messageQueue.enqueueMessage(taskPrompt, undefined, undefined, taskId);
+      if (!state.isProcessing) void processMessages(state, llmApi);
+    },
+    cancelQueued: (taskId) => messageQueue.removeAutomationTask(taskId),
+    activeTaskId: () => state.activeAutomationTaskId,
+    abortActive: (taskId) => {
+      if (state.activeAutomationTaskId !== taskId) return false;
+      state.currentAbortController?.abort();
+      return true;
+    },
+    capabilities: () => ({
+      runtime: "full",
+      domains: "open",
+      builtInTools: [...BUILT_IN_TOOL_NAMES],
+      notes: [
+        "Configured MCP, Home Center, media, game, and other external tools remain explicit permission-gated executors.",
+      ],
+    }),
+  });
 
   // GET /state - Return the current state
   app.get("/state", (_req: Request, res: Response) => {
@@ -264,11 +298,21 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     // Remove the permission request message if it exists
     // Permission requests are handled separately in unified format
 
+    const automationTaskId = state.activeAutomationTaskId;
+
     // Send the permission response to the toolPermissionManager
     if (approved) {
       toolPermissionManager.approveRequest(requestId);
     } else {
       toolPermissionManager.rejectRequest(requestId);
+    }
+
+    if (automationTaskId) {
+      automationRuntime.markPermissionResolved(
+        automationTaskId,
+        requestId,
+        Boolean(approved),
+      );
     }
 
     // Clear pending permission state
@@ -295,6 +339,10 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     // Abort the current processing
     if (state.currentAbortController) {
       state.currentAbortController.abort();
+    }
+
+    if (state.activeAutomationTaskId) {
+      automationRuntime.markPaused(state.activeAutomationTaskId);
     }
 
     // Set isProcessing to false
@@ -454,6 +502,13 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       }
 
       const userMessage = queuedMessage.message;
+      const automationTaskId =
+        queuedMessage.automationTaskId ?? automationRuntime.extractTaskId(userMessage);
+      if (automationTaskId && automationRuntime.shouldSkip(automationTaskId)) {
+        continue;
+      }
+      state.activeAutomationTaskId = automationTaskId;
+      if (automationTaskId) automationRuntime.markRunning(automationTaskId);
       state.isProcessing = true;
       state.lastActivity = Date.now();
       processedMessage = true;
@@ -474,12 +529,27 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
         state.currentAbortController = new AbortController();
 
         // Stream the response with interruption support
-        await streamChatResponseWithInterruption(
+        const response = await streamChatResponseWithInterruption(
           state,
           llmApi,
           state.currentAbortController,
           () => false,
+          automationTaskId
+            ? { runtime: automationRuntime, taskId: automationTaskId }
+            : undefined,
         );
+
+        if (automationTaskId) {
+          const task = automationRuntime.getTask(automationTaskId);
+          if (task?.cancelRequested) {
+            automationRuntime.markCancelled(automationTaskId);
+          } else if (
+            task &&
+            !["blocked", "cancelled", "failed"].includes(task.status)
+          ) {
+            automationRuntime.applyAgentResponse(automationTaskId, response);
+          }
+        }
 
         // No direct persistence here; ChatHistoryService handles persistence when appropriate
 
@@ -502,8 +572,22 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
         if (e.name === "AbortError") {
           logger.debug("Response interrupted");
           removePartialAssistantMessage(state.session.history);
+          if (automationTaskId) {
+            const task = automationRuntime.getTask(automationTaskId);
+            if (task?.cancelRequested) {
+              automationRuntime.markCancelled(automationTaskId);
+            } else if (
+              task &&
+              !["blocked", "blocked_permission", "cancelled"].includes(task.status)
+            ) {
+              automationRuntime.markPaused(automationTaskId);
+            }
+          }
         } else {
           logger.error(`Error: ${formatError(e)}`);
+          if (automationTaskId) {
+            automationRuntime.markFailed(automationTaskId, formatError(e));
+          }
 
           // Add error message via ChatHistoryService
           const errorMessage = `Error: ${formatError(e)}`;
@@ -531,6 +615,9 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       } finally {
         state.currentAbortController = null;
         state.isProcessing = false;
+        if (state.activeAutomationTaskId === automationTaskId) {
+          state.activeAutomationTaskId = null;
+        }
       }
     }
 
