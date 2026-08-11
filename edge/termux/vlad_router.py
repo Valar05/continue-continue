@@ -22,6 +22,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 VALID_ROUTES = {"phone_hands", "shell", "delegate", "blocked", "passthrough"}
+EXIT_SUCCESS = 0
+EXIT_BAD_INVOCATION = 2
+EXIT_BLOCKED = 3
+EXIT_EXECUTION_FAILED = 4
+EXIT_VERIFICATION_FAILED = 5
 
 
 def here() -> pathlib.Path:
@@ -197,6 +202,16 @@ def apply_sheet(payload: dict[str, Any], sheet: pathlib.Path | None = None) -> t
     return task, decision
 
 
+def exit_code_for_status(status: str) -> int:
+    if status in {"completed", "delegated"}:
+        return EXIT_SUCCESS
+    if status == "blocked":
+        return EXIT_BLOCKED
+    if status in {"failed", "cancelled"}:
+        return EXIT_EXECUTION_FAILED
+    return EXIT_VERIFICATION_FAILED
+
+
 def make_handler(edge, sheet: pathlib.Path):
     class Handler(BaseHTTPRequestHandler):
         server_version = "ContinueContinueVladRouter/0.1"
@@ -299,17 +314,20 @@ def main() -> int:
     if args.command == "route":
         task, decision = apply_sheet(read_payload(args.task), args.sheet)
         print(json.dumps({"decision": decision, "task": task}, indent=2))
-        return 0
+        return EXIT_SUCCESS
     if args.command == "run":
         try:
             routed, decision = apply_sheet(read_payload(args.task), args.sheet)
             record = edge.create_record(routed)
             result = edge.execute(record)
             print(json.dumps({"routing": decision, "receipt": result.get("receipt") or result}, indent=2))
-            return 0 if result["status"] in {"completed", "delegated", "blocked"} else 1
+            return exit_code_for_status(result["status"])
+        except (ValueError, json.JSONDecodeError, OSError) as exc:
+            print(json.dumps({"error": str(exc)}), file=sys.stderr)
+            return EXIT_BAD_INVOCATION
         except Exception as exc:
             print(json.dumps({"error": str(exc)}), file=sys.stderr)
-            return 2
+            return EXIT_EXECUTION_FAILED
     if args.command == "capabilities":
         capabilities = edge.capabilities()
         capabilities["ingressRouter"] = {
@@ -319,7 +337,7 @@ def main() -> int:
             "qwenFallback": True,
         }
         print(json.dumps(capabilities, indent=2))
-        return 0
+        return EXIT_SUCCESS
 
     server = ThreadingHTTPServer(
         (args.host, args.port), make_handler(edge, args.sheet)
@@ -331,7 +349,7 @@ def main() -> int:
         pass
     finally:
         server.server_close()
-    return 0
+    return EXIT_SUCCESS
 
 
 if __name__ == "__main__":
