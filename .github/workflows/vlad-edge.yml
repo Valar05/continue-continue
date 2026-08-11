@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile tiny edge runtime
-        run: python -m py_compile edge/termux/vlad_edge.py
-      - name: Run Vlad authority and routing tests
-        run: python -m unittest edge/termux/test_vlad_edge.py
+      - name: Compile tiny edge runtime and doctor
+        run: python -m py_compile edge/termux/vlad_edge.py edge/termux/vlad_doctor.py
+      - name: Run Vlad authority, routing, and readiness tests
+        run: python -m unittest edge/termux/test_vlad_edge.py edge/termux/test_vlad_doctor.py
