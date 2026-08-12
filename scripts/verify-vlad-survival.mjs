@@ -44,6 +44,20 @@ for (const phrase of [
     failures.push(`Vlad CLI lost survival/continuity invariant: ${phrase}`);
 }
 
+const bootstrap = read("edge/termux/vlad_continue_bootstrap.py");
+for (const phrase of [
+  "continue-continue.vlad-bootstrap.v1",
+  '"/api/tags"',
+  "Vlad will not download one implicitly",
+  "provider: ollama",
+  "roles:",
+  "--force",
+  "vlad doctor --require continue",
+]) {
+  if (!bootstrap.includes(phrase))
+    failures.push(`Vlad local coder bootstrap lost minimum-machine invariant: ${phrase}`);
+}
+
 const continueIndex = read("extensions/cli/src/index.ts");
 for (const phrase of [
   '"--session-id <sessionId>"',
@@ -75,8 +89,11 @@ for (const phrase of [
   '"continue_binary"',
   '"continue_permission"',
   '"continue_policy"',
+  '"ollama"',
+  '"continue_local_config"',
   "VLAD_CN_BIN",
   "VLAD_ALLOWED_BINS",
+  "VLAD_OLLAMA_URL",
 ]) {
   if (!doctor.includes(phrase))
     failures.push(`Vlad doctor lost Continue readiness invariant: ${phrase}`);
@@ -86,10 +103,13 @@ const installer = read("edge/termux/install.sh");
 for (const phrase of [
   "Stable machine entrypoint",
   "First-class human survival surface",
-  '"$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/vlad"',
+  '"$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/continue-continue-vlad-cli"',
+  '"$SOURCE_DIR/vlad_continue_bootstrap.py" "$BIN_DIR/continue-continue-vlad-bootstrap"',
+  'if [ "\\${1:-}" = "bootstrap" ]',
+  'exec "$BIN_DIR/continue-continue-vlad-cli"',
 ]) {
   if (!installer.includes(phrase))
-    failures.push(`Vlad installer lost two-door invariant: ${phrase}`);
+    failures.push(`Vlad installer lost two-door/minimum-coder invariant: ${phrase}`);
 }
 
 const docs = read("docs/continue-continue/VLAD_CLI.md");
