@@ -16,6 +16,7 @@ install -m 0755 "$SOURCE_DIR/vlad_continue_bootstrap.py" "$BIN_DIR/continue-cont
 install -m 0755 "$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/continue-continue-vlad-cli"
 install -m 0755 "$SOURCE_DIR/adam_doctor.py" "$BIN_DIR/continue-continue-adam-doctor"
 install -m 0755 "$SOURCE_DIR/adam_cli.py" "$BIN_DIR/continue-continue-adam-cli"
+install -m 0755 "$SOURCE_DIR/install_desktop_ssh_profile.py" "$BIN_DIR/adam-ssh-profile"
 
 # Preserve local edits on reinstall. The shipped sheet is a default, not a remote authority.
 if [ ! -f "$ETC_DIR/routes.csv" ]; then
@@ -59,6 +60,7 @@ chmod 0755 "$BIN_DIR/adam"
 cat <<EOF
 Installed human daemon:   $BIN_DIR/adam
 Installed Adam doctor:    $BIN_DIR/continue-continue-adam-doctor
+Installed desktop SSH tool:$BIN_DIR/adam-ssh-profile
 Installed Vlad helper:    $BIN_DIR/vlad
 Installed machine ingress:$BIN_DIR/continue-continue-vlad
 Installed routing engine: $BIN_DIR/continue-continue-vlad-router
@@ -84,6 +86,12 @@ Human use:
   adam shell 'git status'
   adam code 'Make one bounded change and run its focused test'
   adam review 'Review the current diff'
+
+Desktop SSH profile:
+  adam-ssh-profile --host THECAULDRON --user <desktop-user>
+  ssh desktop
+
+The SSH profile is ordinary OpenSSH configuration. It stores no password or private-key material and remains usable without Adam, Vlad, Continue, or a model.
 
 Vlad remains available as the helper/diagnostic organ:
   vlad doctor --require continue
