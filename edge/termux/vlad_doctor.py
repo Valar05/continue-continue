@@ -8,6 +8,7 @@ import csv
 import json
 import os
 import pathlib
+import re
 import shutil
 import sys
 import tempfile
@@ -22,6 +23,7 @@ DEFAULT_EDGE_BIN = "/data/data/com.termux/files/usr/local/bin/continue-continue-
 DEFAULT_INTERNAL_EDGE_BIN = "/data/data/com.termux/files/usr/local/bin/continue-continue-vlad-edge"
 DEFAULT_ROUTING_SHEET = "/data/data/com.termux/files/usr/etc/continue-continue/routes.csv"
 DEFAULT_ALLOWED_BINS = "cn,git,ffmpeg,ffprobe,python,python3,node,npm,npx,rg,grep,find,ls,pwd,cat,mkdir,cp"
+DEFAULT_OLLAMA = "http://127.0.0.1:11434"
 VALID_ROUTES = {"phone_hands", "shell", "delegate", "blocked", "passthrough"}
 ROUTING_COLUMNS = {
     "priority",
@@ -134,6 +136,62 @@ def _parse_requirements(values: list[str], env: Mapping[str, str]) -> set[str]:
     return required
 
 
+def _continue_dir(env: Mapping[str, str]) -> pathlib.Path:
+    configured = env.get("CONTINUE_GLOBAL_DIR", "").strip()
+    if configured:
+        target = pathlib.Path(os.path.expanduser(configured))
+        return target if target.is_absolute() else pathlib.Path.cwd() / target
+    return pathlib.Path.home() / ".continue"
+
+
+def _ollama_base(env: Mapping[str, str]) -> str:
+    raw = (env.get("VLAD_OLLAMA_URL") or env.get("OLLAMA_HOST") or DEFAULT_OLLAMA).strip()
+    if not raw.startswith(("http://", "https://")):
+        raw = "http://" + raw
+    return raw.rstrip("/")
+
+
+def _ollama_models(env: Mapping[str, str], timeout: float = 2.0) -> tuple[bool, list[str], str]:
+    url = _ollama_base(env) + "/api/tags"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            code = int(getattr(response, "status", 200))
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError) as exc:
+        return False, [], f"unreachable: {url}: {exc}"
+    values = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(values, list):
+        return False, [], f"invalid Ollama model list from {url}"
+    names = sorted(
+        str(item.get("name") or "").strip()
+        for item in values
+        if isinstance(item, dict) and str(item.get("name") or "").strip()
+    )
+    return True, names, f"HTTP {code}; {len(names)} installed model(s)"
+
+
+def _continue_local_config(env: Mapping[str, str], installed_models: list[str]) -> tuple[bool, str]:
+    path = _continue_dir(env) / "config.yaml"
+    if not path.is_file():
+        return False, f"missing: {path}; run `vlad bootstrap`"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return False, f"unreadable: {path}: {exc}"
+    if not re.search(r"(?m)^\s*provider:\s*[\"']?ollama[\"']?\s*$", text):
+        return False, f"no Ollama provider in {path}; run `vlad bootstrap`"
+    match = re.search(r"(?m)^\s*model:\s*(.+?)\s*$", text)
+    if not match:
+        return False, f"no model in {path}; run `vlad bootstrap`"
+    configured = match.group(1).strip().strip("\"'")
+    if configured not in installed_models:
+        return False, f"configured model {configured!r} is not installed in Ollama"
+    if not re.search(r"(?m)^\s*-\s*chat\s*$", text):
+        return False, f"configured model has no chat role in {path}"
+    return True, f"{path}; model={configured}"
+
+
 def diagnose(
     env: Mapping[str, str] | None = None,
     requirements: set[str] | None = None,
@@ -206,6 +264,11 @@ def diagnose(
             f"{cn_name} " + ("allowed" if continue_policy_ok else "excluded") + " by VLAD_ALLOWED_BINS",
         )
     )
+
+    ollama_ok, installed_models, ollama_detail = _ollama_models(env)
+    checks.append(Check("ollama", ollama_ok, continue_required, ollama_detail))
+    config_ok, config_detail = _continue_local_config(env, installed_models)
+    checks.append(Check("continue_local_config", config_ok, continue_required, config_detail))
 
     phone_required = "phone_hands" in requirements
     phone_bin = env.get("PHONE_ASK_BIN", DEFAULT_PHONE_ASK)
