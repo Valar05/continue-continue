@@ -14,6 +14,8 @@ install -m 0755 "$SOURCE_DIR/vlad_edge.py" "$BIN_DIR/continue-continue-vlad-edge
 install -m 0755 "$SOURCE_DIR/vlad_doctor.py" "$BIN_DIR/continue-continue-vlad-doctor"
 install -m 0755 "$SOURCE_DIR/vlad_continue_bootstrap.py" "$BIN_DIR/continue-continue-vlad-bootstrap"
 install -m 0755 "$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/continue-continue-vlad-cli"
+install -m 0755 "$SOURCE_DIR/adam_doctor.py" "$BIN_DIR/continue-continue-adam-doctor"
+install -m 0755 "$SOURCE_DIR/adam_cli.py" "$BIN_DIR/continue-continue-adam-cli"
 
 # Preserve local edits on reinstall. The shipped sheet is a default, not a remote authority.
 if [ ! -f "$ETC_DIR/routes.csv" ]; then
@@ -30,8 +32,7 @@ exec "$BIN_DIR/continue-continue-vlad-router" "\$@"
 EOF
 chmod 0755 "$BIN_DIR/continue-continue-vlad"
 
-# First-class human survival surface. Bootstrap is deterministic and local;
-# every other command stays on the existing Python CLI and machine ingress.
+# Vlad owns model-backed judgment and Continue/Ollama readiness.
 cat > "$BIN_DIR/vlad" <<EOF
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
@@ -43,47 +44,52 @@ exec "$BIN_DIR/continue-continue-vlad-cli" "\$@"
 EOF
 chmod 0755 "$BIN_DIR/vlad"
 
+# Adam is the human-facing phone daemon. It performs no model inference itself;
+# shell/Continue/phone work is routed through deterministic commands and Vlad.
+cat > "$BIN_DIR/adam" <<EOF
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+export ADAM_BIN="\${ADAM_BIN:-$BIN_DIR/adam}"
+export ADAM_DOCTOR_BIN="\${ADAM_DOCTOR_BIN:-$BIN_DIR/continue-continue-adam-doctor}"
+export ADAM_VLAD_BIN="\${ADAM_VLAD_BIN:-$BIN_DIR/vlad}"
+exec "$BIN_DIR/continue-continue-adam-cli" "\$@"
+EOF
+chmod 0755 "$BIN_DIR/adam"
+
 cat <<EOF
-Installed human CLI:      $BIN_DIR/vlad
+Installed human daemon:   $BIN_DIR/adam
+Installed Adam doctor:    $BIN_DIR/continue-continue-adam-doctor
+Installed Vlad helper:    $BIN_DIR/vlad
 Installed machine ingress:$BIN_DIR/continue-continue-vlad
 Installed routing engine: $BIN_DIR/continue-continue-vlad-router
 Installed internal edge:  $BIN_DIR/continue-continue-vlad-edge
-Installed doctor:         $BIN_DIR/continue-continue-vlad-doctor
+Installed Vlad doctor:    $BIN_DIR/continue-continue-vlad-doctor
 Installed coder bootstrap:$BIN_DIR/continue-continue-vlad-bootstrap
 Routing sheet:            $ETC_DIR/routes.csv
+
+Ownership:
+  adam = phone-facing prompt, shell/Continue command surface, routing, policy, receipts; no model inference
+  vlad = Ollama/model-backed judgment and Continue model readiness
+  venice = optional adviser, never required for Adam readiness
 
 Safe defaults remain OFF:
   VLAD_ALLOW_PHONE_HANDS=0
   VLAD_ALLOW_LOCAL_EXEC=0
 
-Optional explicit organs:
-  PHONE_ASK_BIN=${PHONE_ASK_BIN:-/data/data/com.termux/files/usr/local/bin/home-center-phone-ask}
-  CONTINUE_CONTINUE_UPSTREAM_URL=<full runtime URL>
-  QWEN_BASE_URL=http://127.0.0.1:8091/v1
-  QWEN_MODEL=Qwen3-1.7B-Q6_K
-  VLAD_CN_BIN=cn
-  VLAD_OLLAMA_URL=http://127.0.0.1:11434
-  VLAD_OLLAMA_MODEL=<already-installed Ollama model>
-
-Minimum local coding path:
-  vlad bootstrap
-  vlad doctor --require continue
-  vlad code --auto "Make one bounded change and run its focused test"
+First bounded proof:
+  adam doctor
 
 Human use:
-  vlad
-  vlad status
-  vlad "Open settings"
-  vlad route "Render a short video"
-  vlad review "Review the current diff"
+  adam
+  adam shell 'git status'
+  adam code 'Make one bounded change and run its focused test'
+  adam review 'Review the current diff'
+
+Vlad remains available as the helper/diagnostic organ:
+  vlad doctor --require continue
+  vlad bootstrap
 
 Coding remains explicitly gated by Vlad edge. To authorize local Continue work,
 VLAD_ALLOW_LOCAL_EXEC must be 1 and cn must remain allowed by VLAD_ALLOWED_BINS.
-`vlad bootstrap` never downloads a model and never overwrites a non-empty
-Continue config unless --force is explicit.
-
-Machine use:
-  printf '%s\n' '{"request":"Open settings"}' | continue-continue-vlad route -
-  continue-continue-vlad-doctor --require phone_hands
-  continue-continue-vlad serve --host 127.0.0.1 --port 8765
+Adam never enables that gate and never contacts Ollama directly.
 EOF
