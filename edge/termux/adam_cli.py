@@ -116,7 +116,7 @@ def repl() -> int:
     print("Adam local. Deterministic shell. /cd, /pwd, !CMD, /shell CMD, /code, /review, /doctor, /vlad, /quit.")
     while True:
         try:
-            line = input(f"adam:{cwd.name or '/'}> ")
+            line = input("adam> ")
         except EOFError:
             return 0
         text = line.strip()
