@@ -40,6 +40,11 @@ jobs:
           edge/termux/vlad_doctor.py
           edge/termux/vlad_cli.py
           edge/termux/vlad_continue_bootstrap.py
+      - name: Syntax-check minimum Termux install lanes
+        run: |
+          bash -n edge/termux/install.sh
+          bash -n edge/termux/install_cn_from_source.sh
+          bash -n edge/termux/bootstrap_minimum_vlad.sh
       - name: Run Vlad authority routing ingress readiness and CLI tests
         run: python -m unittest discover -s edge/termux -p 'test_*.py'
       - name: Verify Vlad survival and authority invariants
