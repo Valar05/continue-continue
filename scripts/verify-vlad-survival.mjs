@@ -124,17 +124,50 @@ for (const phrase of [
     failures.push(`Vlad doctor lost Continue readiness invariant: ${phrase}`);
 }
 
+const adamDoctor = read("edge/termux/adam_doctor.py");
+for (const phrase of [
+  "continue-continue.adam-doctor.v1",
+  'env.get("ADAM_VLAD_BIN", "vlad")',
+  '[path, "--json", "doctor", "--require", "continue"]',
+  '"UNKNOWN"',
+  '"optional adviser; never required for Adam readiness"',
+  "Adam does not contact Ollama or perform inference",
+]) {
+  if (!adamDoctor.includes(phrase))
+    failures.push(`Adam doctor lost deterministic ownership invariant: ${phrase}`);
+}
+for (const forbidden of ["/api/tags", "urllib.request", "QWEN_BASE_URL"]) {
+  if (adamDoctor.includes(forbidden))
+    failures.push(`Adam doctor illegally reached into model ownership: ${forbidden}`);
+}
+
+const adamCli = read("edge/termux/adam_cli.py");
+for (const phrase of [
+  'input("adam> ")',
+  'text.startswith("!")',
+  'text.startswith("/code ")',
+  'text.startswith("/review ")',
+  "unknown Adam command; no model fallback is permitted",
+]) {
+  if (!adamCli.includes(phrase))
+    failures.push(`Adam command surface lost deterministic routing invariant: ${phrase}`);
+}
+
 const installer = read("edge/termux/install.sh");
 for (const phrase of [
   "Stable machine entrypoint",
-  "First-class human survival surface",
   '"$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/continue-continue-vlad-cli"',
   '"$SOURCE_DIR/vlad_continue_bootstrap.py" "$BIN_DIR/continue-continue-vlad-bootstrap"',
+  '"$SOURCE_DIR/adam_doctor.py" "$BIN_DIR/continue-continue-adam-doctor"',
+  '"$SOURCE_DIR/adam_cli.py" "$BIN_DIR/continue-continue-adam-cli"',
   'if [ "\\${1:-}" = "bootstrap" ]',
   'exec "$BIN_DIR/continue-continue-vlad-cli"',
+  "Adam is the human-facing phone daemon",
+  'exec "$BIN_DIR/continue-continue-adam-cli"',
+  "adam doctor",
 ]) {
   if (!installer.includes(phrase))
-    failures.push(`Vlad installer lost two-door/minimum-coder invariant: ${phrase}`);
+    failures.push(`Adam/Vlad installer lost ownership/survival invariant: ${phrase}`);
 }
 
 const docs = read("docs/continue-continue/VLAD_CLI.md");
@@ -150,10 +183,10 @@ for (const phrase of [
 
 if (failures.length) {
   console.error(
-    "Vlad survival verification failed:\n" +
+    "Adam/Vlad survival verification failed:\n" +
       failures.map((x) => `- ${x}`).join("\n"),
   );
   process.exit(1);
 }
 
-console.log("Vlad survival verification passed.");
+console.log("Adam/Vlad survival verification passed.");

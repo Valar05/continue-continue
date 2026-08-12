@@ -36,6 +36,10 @@ const requiredFiles = [
   "edge/termux/test_vlad_doctor.py",
   "edge/termux/vlad_cli.py",
   "edge/termux/test_vlad_cli.py",
+  "edge/termux/adam_cli.py",
+  "edge/termux/test_adam_cli.py",
+  "edge/termux/adam_doctor.py",
+  "edge/termux/test_adam_doctor.py",
   "edge/termux/routes.csv",
   "edge/termux/install.sh",
   "docs/continue-continue/AUTOMATION_LAYER.md",
@@ -218,6 +222,18 @@ for (const phrase of [
     failures.push(`Vlad human CLI lost survival/authority invariant: ${phrase}`);
 }
 
+const adamCli = read("edge/termux/adam_cli.py");
+for (const phrase of [
+  'input("adam> ")',
+  'text.startswith("!")',
+  'text.startswith("/code ")',
+  'text.startswith("/review ")',
+  "no model fallback is permitted",
+]) {
+  if (!adamCli.includes(phrase))
+    failures.push(`Adam human ingress lost deterministic invariant: ${phrase}`);
+}
+
 const vladInstaller = read("edge/termux/install.sh");
 for (const phrase of [
   "continue-continue-vlad-router",
@@ -225,11 +241,13 @@ for (const phrase of [
   "routes.csv",
   "if [ ! -f",
   "Stable machine entrypoint",
-  "First-class human survival surface",
-  '"$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/vlad"',
+  "Adam is the human-facing phone daemon",
+  '"$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/continue-continue-vlad-cli"',
+  '"$SOURCE_DIR/adam_cli.py" "$BIN_DIR/continue-continue-adam-cli"',
+  'exec "$BIN_DIR/continue-continue-adam-cli"',
 ]) {
   if (!vladInstaller.includes(phrase))
-    failures.push(`Vlad installer lost routed/human ingress invariant: ${phrase}`);
+    failures.push(`Adam/Vlad installer lost routed/human ingress invariant: ${phrase}`);
 }
 
 const vladDoctor = read("edge/termux/vlad_doctor.py");

@@ -32,7 +32,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile tiny edge runtime ingress doctor human CLI and local coder bootstrap
+      - name: Compile tiny edge runtime and Adam/Vlad command surfaces
         run: >-
           python -m py_compile
           edge/termux/vlad_edge.py
@@ -40,12 +40,14 @@ jobs:
           edge/termux/vlad_doctor.py
           edge/termux/vlad_cli.py
           edge/termux/vlad_continue_bootstrap.py
+          edge/termux/adam_doctor.py
+          edge/termux/adam_cli.py
       - name: Syntax-check minimum Termux install lanes
         run: |
           bash -n edge/termux/install.sh
           bash -n edge/termux/install_cn_from_source.sh
           bash -n edge/termux/bootstrap_minimum_vlad.sh
-      - name: Run Vlad authority routing ingress readiness and CLI tests
+      - name: Run Adam and Vlad deterministic boundary tests
         run: python -m unittest discover -s edge/termux -p 'test_*.py'
       - name: Verify Vlad survival and authority invariants
         run: node scripts/verify-vlad-survival.mjs
