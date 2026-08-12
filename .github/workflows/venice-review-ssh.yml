@@ -1,0 +1,52 @@
+name: Venice SSH External Review
+
+on:
+  pull_request:
+    paths:
+      - "edge/termux/install.sh"
+      - "edge/termux/install_desktop_ssh_profile.py"
+      - "edge/termux/test_desktop_ssh_profile.py"
+      - "edge/termux/desktop_ssh_profile_gate.py"
+      - "edge/termux/SSH_PROFILE_ACCEPTANCE.md"
+
+permissions:
+  contents: read
+
+jobs:
+  venice-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve exact review range
+        run: |
+          git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+          echo "VENICE_BASE=$(git rev-parse refs/remotes/origin/${{ github.base_ref }})" >> "$GITHUB_ENV"
+          echo "VENICE_HEAD=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"
+      - name: Install Ollama
+        run: |
+          export OLLAMA_VERSION=0.30.8
+          curl -fsSL https://ollama.com/install.sh | sh
+          nohup ollama serve >/tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && break; sleep 1; done
+          ollama pull qwen2.5-coder:1.5b
+      - name: Venice reviews exact SSH worker diff
+        run: |
+          python scripts/venice_review.py --repo . --base "$VENICE_BASE" --head "$VENICE_HEAD" --acceptance-file edge/termux/SSH_PROFILE_ACCEPTANCE.md --model qwen2.5-coder:1.5b --receipt /tmp/venice-review.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/venice-review.json'))
+          assert r['independentOfChatGPT'] is True
+          assert r['externalReviewGateSatisfied'] is True
+          assert r['verdict']=='PASS'
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: venice-ssh-review-${{ github.event.pull_request.head.sha }}
+          path: /tmp/venice-review.json

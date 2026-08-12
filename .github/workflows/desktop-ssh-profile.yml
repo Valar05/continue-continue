@@ -1,0 +1,23 @@
+name: Desktop SSH Profile
+
+on:
+  pull_request:
+    paths:
+      - "edge/termux/install.sh"
+      - "edge/termux/install_desktop_ssh_profile.py"
+      - "edge/termux/test_desktop_ssh_profile.py"
+      - "edge/termux/desktop_ssh_profile_gate.py"
+      - "edge/termux/SSH_PROFILE_ACCEPTANCE.md"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python edge/termux/desktop_ssh_profile_gate.py
