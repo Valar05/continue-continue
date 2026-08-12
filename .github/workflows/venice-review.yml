@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Capture exact review range and acceptance
+      - name: Capture exact head, base ref, and acceptance
         run: |
           python - <<'PY'
           import json, os, pathlib
@@ -29,9 +29,13 @@ jobs:
           pr = event['pull_request']
           pathlib.Path('/tmp/venice-acceptance.txt').write_text(pr.get('body') or '', encoding='utf-8')
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as out:
-              out.write(f"VENICE_BASE={pr['base']['sha']}\n")
+              out.write(f"VENICE_BASE_REF={pr['base']['ref']}\n")
               out.write(f"VENICE_HEAD={pr['head']['sha']}\n")
           PY
+      - name: Resolve current integration base
+        run: |
+          git fetch --no-tags origin "+refs/heads/$VENICE_BASE_REF:refs/remotes/origin/$VENICE_BASE_REF"
+          echo "VENICE_BASE=$(git rev-parse "refs/remotes/origin/$VENICE_BASE_REF")" >> "$GITHUB_ENV"
       - name: Verify exact Git objects exist
         run: |
           git cat-file -e "$VENICE_BASE^{commit}"
