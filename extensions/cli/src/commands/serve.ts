@@ -5,6 +5,9 @@ import express, { Request, Response } from "express";
 import { ToolPermissionServiceState } from "src/services/ToolPermissionService.js";
 import { prependPrompt } from "src/util/promptProcessor.js";
 
+import { AutomationRuntime } from "../automation/AutomationRuntime.js";
+import { registerServeAutomationRoutes } from "../automation/AutomationServeAdapter.js";
+import { AutomationTaskStore } from "../automation/AutomationTaskStore.js";
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
 import { setAgentId } from "../index.js";
@@ -35,40 +38,20 @@ import { getGitDiffSnapshot } from "../util/git.js";
 import { logger } from "../util/logger.js";
 import { readStdinSync } from "../util/stdin.js";
 
-import { ExtendedCommandOptions } from "./BaseCommandOptions.js";
 import {
+  beginAutomationTurn,
   checkAgentComplete,
+  completeAutomationTurn,
+  handleAutomationAbort,
+  handleAutomationFailure,
   removePartialAssistantMessage,
+  shouldQueueInitialPrompt,
   streamChatResponseWithInterruption,
+  type ServeOptions,
   type ServerState,
 } from "./serve.helpers.js";
 
-interface ServeOptions extends ExtendedCommandOptions {
-  timeout?: string;
-  port?: string;
-  /** Storage identifier for remote sync */
-  id?: string;
-}
-
-/**
- * Decide whether to enqueue the initial prompt on server startup.
- * We only want to send it when starting a brand-new session; if any non-system
- * messages already exist (e.g., after resume), skip to avoid replaying.
- */
-export function shouldQueueInitialPrompt(
-  history: ChatHistoryItem[],
-  prompt?: string | null,
-): boolean {
-  if (!prompt) {
-    return false;
-  }
-
-  // If there are any non-system messages, we already have conversation context
-  const hasConversation = history.some(
-    (item) => item.message.role !== "system",
-  );
-  return !hasConversation;
-}
+export { shouldQueueInitialPrompt };
 
 // eslint-disable-next-line max-statements
 export async function serve(prompt?: string, options: ServeOptions = {}) {
@@ -170,7 +153,14 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     currentAbortController: null,
     serverRunning: true,
     pendingPermission: null,
+    activeAutomationTaskId: null,
   };
+
+  const automationStore = new AutomationTaskStore();
+  const automationRuntime = new AutomationRuntime(
+    automationStore.loadAll(),
+    (tasks) => automationStore.saveAll(tasks),
+  );
 
   const syncSessionHistory = () => {
     try {
@@ -210,6 +200,10 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
 
   const app = express();
   app.use(express.json());
+
+  registerServeAutomationRoutes(app, state, automationRuntime, () => {
+    void processMessages(state, llmApi);
+  });
 
   // GET /state - Return the current state
   app.get("/state", (_req: Request, res: Response) => {
@@ -264,11 +258,21 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     // Remove the permission request message if it exists
     // Permission requests are handled separately in unified format
 
+    const automationTaskId = state.activeAutomationTaskId;
+
     // Send the permission response to the toolPermissionManager
     if (approved) {
       toolPermissionManager.approveRequest(requestId);
     } else {
       toolPermissionManager.rejectRequest(requestId);
+    }
+
+    if (automationTaskId) {
+      automationRuntime.markPermissionResolved(
+        automationTaskId,
+        requestId,
+        Boolean(approved),
+      );
     }
 
     // Clear pending permission state
@@ -295,6 +299,10 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
     // Abort the current processing
     if (state.currentAbortController) {
       state.currentAbortController.abort();
+    }
+
+    if (state.activeAutomationTaskId) {
+      automationRuntime.markPaused(state.activeAutomationTaskId);
     }
 
     // Set isProcessing to false
@@ -454,6 +462,13 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       }
 
       const userMessage = queuedMessage.message;
+      const automationTurn = beginAutomationTurn(
+        state,
+        automationRuntime,
+        queuedMessage,
+      );
+      if (automationTurn.skip) continue;
+      const automationTaskId = automationTurn.taskId;
       state.isProcessing = true;
       state.lastActivity = Date.now();
       processedMessage = true;
@@ -474,12 +489,17 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
         state.currentAbortController = new AbortController();
 
         // Stream the response with interruption support
-        await streamChatResponseWithInterruption(
+        const response = await streamChatResponseWithInterruption(
           state,
           llmApi,
           state.currentAbortController,
           () => false,
+          automationTaskId
+            ? { runtime: automationRuntime, taskId: automationTaskId }
+            : undefined,
         );
+
+        completeAutomationTurn(automationRuntime, automationTaskId, response);
 
         // No direct persistence here; ChatHistoryService handles persistence when appropriate
 
@@ -502,8 +522,14 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
         if (e.name === "AbortError") {
           logger.debug("Response interrupted");
           removePartialAssistantMessage(state.session.history);
+          handleAutomationAbort(automationRuntime, automationTaskId);
         } else {
           logger.error(`Error: ${formatError(e)}`);
+          handleAutomationFailure(
+            automationRuntime,
+            automationTaskId,
+            formatError(e),
+          );
 
           // Add error message via ChatHistoryService
           const errorMessage = `Error: ${formatError(e)}`;
@@ -531,6 +557,9 @@ export async function serve(prompt?: string, options: ServeOptions = {}) {
       } finally {
         state.currentAbortController = null;
         state.isProcessing = false;
+        if (state.activeAutomationTaskId === automationTaskId) {
+          state.activeAutomationTaskId = null;
+        }
       }
     }
 

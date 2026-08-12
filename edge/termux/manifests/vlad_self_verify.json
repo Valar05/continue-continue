@@ -1,0 +1,35 @@
+{
+  "schema": "mobile-coding-dungeon.v1",
+  "name": "continue-continue-vlad-self-verify",
+  "owner": "Drew Clarke",
+  "principal": "Adam",
+  "workspace": "~/.local/share/continue-continue",
+  "objective": "Verify one bounded Vlad edge change authored through local Continue and reviewed before promotion.",
+  "steps": [
+    {
+      "type": "verify",
+      "name": "bounded-edge-diff-exists",
+      "run": "test -n \"$(git status --porcelain -- edge/termux)\""
+    },
+    {
+      "type": "verify",
+      "name": "diff-is-whitespace-clean",
+      "run": "git diff --check -- edge/termux"
+    },
+    {
+      "type": "verify",
+      "name": "python-edge-compiles",
+      "run": "python -m py_compile edge/termux/vlad_edge.py edge/termux/vlad_router.py edge/termux/vlad_doctor.py"
+    },
+    {
+      "type": "verify",
+      "name": "vlad-edge-tests-pass",
+      "run": "python -m unittest discover -s edge/termux -p 'test_*.py'"
+    }
+  ],
+  "stop": {
+    "max_cycles": 1,
+    "same_failure_limit": 1,
+    "command_timeout_seconds": 180
+  }
+}

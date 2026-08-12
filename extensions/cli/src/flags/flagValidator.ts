@@ -19,6 +19,7 @@ export interface ValidationOptions {
   // Session flags
   resume?: boolean;
   fork?: string;
+  sessionId?: string;
 
   // Permission flags
   allow?: string[];
@@ -111,10 +112,12 @@ function validateModeFlags(options: ValidationOptions): ValidationError[] {
 function validateSessionFlags(options: ValidationOptions): ValidationError[] {
   const errors: ValidationError[] = [];
 
-  if (options.resume && options.fork) {
+  const explicitSession = options.sessionId?.trim();
+  const selectedModes = [Boolean(options.resume), Boolean(options.fork), Boolean(explicitSession)].filter(Boolean).length;
+  if (selectedModes > 1) {
     errors.push({
       code: "CONFLICTING_SESSION_FLAGS",
-      message: "Error: Cannot use both --resume and --fork flags together",
+      message: "Error: Use only one of --resume, --fork, or --session-id",
     });
   }
 
@@ -122,6 +125,20 @@ function validateSessionFlags(options: ValidationOptions): ValidationError[] {
     errors.push({
       code: "FORK_REQUIRES_SESSION_ID",
       message: "Error: --fork requires a session ID (e.g., --fork abc123)",
+    });
+  }
+
+  if (options.sessionId !== undefined && !explicitSession) {
+    errors.push({
+      code: "SESSION_ID_REQUIRED",
+      message: "Error: --session-id requires a non-empty session ID",
+    });
+  }
+
+  if (explicitSession && !options.print) {
+    errors.push({
+      code: "SESSION_ID_REQUIRES_PRINT",
+      message: "Error: --session-id is supported only with -p/--print headless mode",
     });
   }
 
@@ -208,7 +225,7 @@ export function validateFlags(options: ValidationOptions): ValidationResult {
 
 /**
  * Display validation errors and exit process
- * Provides consistent error formatting across all commands
+ * Provides consistent error formatting
  */
 export function handleValidationErrors(errors: ValidationError[]): never {
   for (const error of errors) {

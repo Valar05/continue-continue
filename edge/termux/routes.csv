@@ -1,0 +1,9 @@
+priority,enabled,name,domain,contains_any,contains_all,route,target_domain,command,phone_prompt,reason
+1,1,deny-destructive-phone,*,factory reset|wipe phone|erase all data|format storage,,blocked,system,,,destructive phone request requires higher authority
+10,1,android-ui,*,go home|home screen|open app|launch app|tap |swipe|scroll|open settings|phone settings|notification shade|brightness|volume up|volume down|phone volume|wifi|bluetooth,,phone_hands,system,,{goal},obvious Android UI or device action
+20,1,audio-work,*,audio|sound|music|voice|tts|speech|podcast,,delegate,audio,,,audio work belongs to the full automation runtime by default
+21,1,video-work,*,video|animation|motion canvas|movie|mp4|gif,,delegate,video,,,video work belongs to the full automation runtime by default
+22,1,image-work,*,image|picture|photo|illustration|comfyui|stable diffusion,,delegate,image,,,image work belongs to the full automation runtime by default
+23,1,game-work,*,godot|game build|playtest|game project|level editor,,delegate,game,,,game work belongs to the full automation runtime by default
+24,1,fabrication-work,*,blender|3d model|mesh|glb|gltf|cad|fabrication,,delegate,fabrication,,,fabrication work belongs to the full automation runtime by default
+30,1,code-heavy,*,implement|refactor|code review|pull request|merge branch|compile project|run tests,,delegate,code,,,nontrivial code work belongs to the full automation runtime by default

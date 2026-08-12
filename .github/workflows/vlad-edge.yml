@@ -1,0 +1,53 @@
+name: Vlad Termux Edge
+
+on:
+  pull_request:
+    paths:
+      - "edge/termux/**"
+      - "docs/continue-continue/VLAD_TERMUX_EDGE.md"
+      - "docs/continue-continue/VLAD_ROUTING_SHEET.md"
+      - "docs/continue-continue/VLAD_CLI.md"
+      - "scripts/verify-continue-continue-standards.mjs"
+      - "scripts/verify-vlad-survival.mjs"
+      - ".github/workflows/vlad-edge.yml"
+  push:
+    branches: [main]
+    paths:
+      - "edge/termux/**"
+      - "docs/continue-continue/VLAD_TERMUX_EDGE.md"
+      - "docs/continue-continue/VLAD_ROUTING_SHEET.md"
+      - "docs/continue-continue/VLAD_CLI.md"
+      - "scripts/verify-continue-continue-standards.mjs"
+      - "scripts/verify-vlad-survival.mjs"
+      - ".github/workflows/vlad-edge.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  vlad-edge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile tiny edge runtime and Adam/Vlad command surfaces
+        run: >-
+          python -m py_compile
+          edge/termux/vlad_edge.py
+          edge/termux/vlad_router.py
+          edge/termux/vlad_doctor.py
+          edge/termux/vlad_cli.py
+          edge/termux/vlad_continue_bootstrap.py
+          edge/termux/adam_doctor.py
+          edge/termux/adam_cli.py
+      - name: Syntax-check minimum Termux install lanes
+        run: |
+          bash -n edge/termux/install.sh
+          bash -n edge/termux/install_cn_from_source.sh
+          bash -n edge/termux/bootstrap_minimum_vlad.sh
+      - name: Run Adam and Vlad deterministic boundary tests
+        run: python -m unittest discover -s edge/termux -p 'test_*.py'
+      - name: Verify Vlad survival and authority invariants
+        run: node scripts/verify-vlad-survival.mjs

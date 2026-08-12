@@ -1,14 +1,28 @@
 import type { ChatHistoryItem, Session, ToolStatus } from "core/index.js";
 
+import type { AutomationRuntime } from "../automation/AutomationRuntime.js";
 import { services } from "../services/index.js";
+import type { QueuedMessage } from "../stream/messageQueue.js";
 import { streamChatResponse } from "../stream/streamChatResponse.js";
 import { StreamCallbacks } from "../stream/streamChatResponse.types.js";
 import { logger } from "../util/logger.js";
 
-/**
- * Remove partial assistant message if the last message is an empty assistant message.
- * Used when a response is interrupted.
- */
+import type { ExtendedCommandOptions } from "./BaseCommandOptions.js";
+
+export interface ServeOptions extends ExtendedCommandOptions {
+  timeout?: string;
+  port?: string;
+  id?: string;
+}
+
+export function shouldQueueInitialPrompt(
+  history: ChatHistoryItem[],
+  prompt?: string | null,
+): boolean {
+  if (!prompt) return false;
+  return !history.some((item) => item.message.role !== "system");
+}
+
 export function removePartialAssistantMessage(
   sessionHistory: ChatHistoryItem[],
 ): void {
@@ -30,15 +44,80 @@ export function removePartialAssistantMessage(
   }
 }
 
-// Modified version of streamChatResponse that supports interruption
+export interface AutomationTurnContext {
+  runtime: AutomationRuntime;
+  taskId: string;
+}
+
+export interface BeginAutomationTurnResult {
+  taskId: string | null;
+  skip: boolean;
+}
+
+export function beginAutomationTurn(
+  state: ServerState,
+  runtime: AutomationRuntime,
+  queuedMessage: Pick<QueuedMessage, "message" | "automationTaskId">,
+): BeginAutomationTurnResult {
+  const taskId =
+    queuedMessage.automationTaskId ??
+    runtime.extractTaskId(queuedMessage.message);
+  if (taskId && runtime.shouldSkip(taskId)) {
+    return { taskId, skip: true };
+  }
+  state.activeAutomationTaskId = taskId;
+  if (taskId) runtime.markRunning(taskId);
+  return { taskId, skip: false };
+}
+
+export function completeAutomationTurn(
+  runtime: AutomationRuntime,
+  taskId: string | null,
+  response: string,
+): void {
+  if (!taskId) return;
+  const task = runtime.getTask(taskId);
+  if (task?.cancelRequested) {
+    runtime.markCancelled(taskId);
+  } else if (
+    task &&
+    !["blocked", "cancelled", "failed"].includes(task.status)
+  ) {
+    runtime.applyAgentResponse(taskId, response);
+  }
+}
+
+export function handleAutomationAbort(
+  runtime: AutomationRuntime,
+  taskId: string | null,
+): void {
+  if (!taskId) return;
+  const task = runtime.getTask(taskId);
+  if (task?.cancelRequested) {
+    runtime.markCancelled(taskId);
+  } else if (
+    task &&
+    !["blocked", "blocked_permission", "cancelled"].includes(task.status)
+  ) {
+    runtime.markPaused(taskId);
+  }
+}
+
+export function handleAutomationFailure(
+  runtime: AutomationRuntime,
+  taskId: string | null,
+  error: string,
+): void {
+  if (taskId) runtime.markFailed(taskId, error);
+}
+
 export async function streamChatResponseWithInterruption(
   state: ServerState,
   llmApi: any,
   abortController: AbortController,
   shouldInterrupt: () => boolean,
+  automation?: AutomationTurnContext,
 ): Promise<string> {
-  // Import the original streamChatResponse logic but add interruption checks
-  // Create a wrapper that checks for interruption
   const originalSignal = abortController.signal;
   const checkInterruption = () => {
     if (shouldInterrupt() && !originalSignal.aborted) {
@@ -46,30 +125,29 @@ export async function streamChatResponseWithInterruption(
     }
   };
 
-  // Set up periodic interruption checks
   const interruptionChecker = setInterval(checkInterruption, 100);
 
-  // Create callbacks to capture tool events
   const callbacks: StreamCallbacks = {
-    onContent: (_: string) => {
-      // onContent is empty - doesn't update history during streaming
-      // This is just for real-time display purposes
+    onContent: (_: string) => {},
+    onContentComplete: (_: string) => {},
+    onToolStart: (toolName: string, _?: any) => {
+      if (automation) {
+        automation.runtime.markToolStart(automation.taskId, toolName);
+      }
     },
-    onContentComplete: (_: string) => {
-      // Note: streamChatResponse already adds messages to history via handleToolCalls
-      // so we don't need to add them here - this callback is just for notification
-      // that content streaming is complete
+    onToolResult: (_result: string, toolName: string, status: ToolStatus) => {
+      if (automation) {
+        automation.runtime.markToolResult(
+          automation.taskId,
+          toolName,
+          String(status),
+        );
+      }
     },
-    onToolStart: (__: string, _?: any) => {
-      // Note: handleToolCalls already adds the tool call message to history
-      // This callback is just for notification/UI updates
-      // The tool call state is already created and added by handleToolCalls
-    },
-    onToolResult: (_result: string, _toolName: string, _status: ToolStatus) => {
-      // No-op when using ChatHistoryService; it updates tool states/results
-    },
-    onToolError: (_error: string, _toolName?: string) => {
-      // No-op; errors are added to history via handleToolCalls flow
+    onToolError: (error: string, toolName?: string) => {
+      if (automation) {
+        automation.runtime.markToolError(automation.taskId, toolName, error);
+      }
     },
     onToolPermissionRequest: (
       toolName: string,
@@ -77,7 +155,6 @@ export async function streamChatResponseWithInterruption(
       requestId: string,
       toolCallPreview?: any[],
     ) => {
-      // Set pending permission state
       state.pendingPermission = {
         toolName,
         toolArgs,
@@ -85,28 +162,30 @@ export async function streamChatResponseWithInterruption(
         timestamp: Date.now(),
         toolCallPreview,
       };
+      if (automation) {
+        automation.runtime.markPermissionBlocked(
+          automation.taskId,
+          toolName,
+          requestId,
+        );
+      }
 
-      // Add a system message indicating permission is needed via service
       try {
         services.chatHistory.addSystemMessage(
           `WARNING: Tool ${toolName} requires permission`,
         );
       } catch (err) {
-        // Do not mutate session history; ChatHistoryService is the source of truth
         logger.error(
           "Failed to add system message via ChatHistoryService",
           err,
           { context: "onToolPermissionRequest", toolName, requestId },
         );
       }
-
-      // Don't wait here - the streamChatResponse will handle waiting
     },
     onSystemMessage: (message: string) => {
       try {
         services.chatHistory.addSystemMessage(message);
       } catch (err) {
-        // Do not mutate session history; ChatHistoryService is the source of truth
         logger.error(
           "Failed to add system message via ChatHistoryService",
           err,
@@ -147,13 +226,10 @@ export interface ServerState {
   currentAbortController: AbortController | null;
   serverRunning: boolean;
   pendingPermission: PendingPermission | null;
+  activeAutomationTaskId: string | null;
   systemMessage?: string;
 }
 
-/**
- * Check if the agent should be marked as complete based on conversation history.
- * The agent is complete if the last message is from the assistant and has no tool calls.
- */
 export function checkAgentComplete(
   history: { message: { role: string; tool_calls?: any[] } }[] | undefined,
 ): boolean {
