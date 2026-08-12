@@ -58,6 +58,31 @@ for (const phrase of [
     failures.push(`Vlad local coder bootstrap lost minimum-machine invariant: ${phrase}`);
 }
 
+const cnSourceInstaller = read("edge/termux/install_cn_from_source.sh");
+for (const phrase of [
+  "Node >=18",
+  "npm run build:local-deps",
+  "npm run build",
+  "continue-continue-cli",
+  '"$BIN_DIR/cn" --version',
+]) {
+  if (!cnSourceInstaller.includes(phrase))
+    failures.push(`Vlad exact-fork cn installer lost minimum-machine invariant: ${phrase}`);
+}
+
+const minimumBootstrap = read("edge/termux/bootstrap_minimum_vlad.sh");
+for (const phrase of [
+  "install_cn_from_source.sh",
+  '"$SOURCE_DIR/install.sh"',
+  "vlad bootstrap",
+  "VLAD_ALLOW_LOCAL_EXEC=1 vlad doctor --require continue",
+  "VLAD_CAN_CODE",
+  "After that succeeds, stop using the outside coding path",
+]) {
+  if (!minimumBootstrap.includes(phrase))
+    failures.push(`Vlad minimum bootstrap lost handoff invariant: ${phrase}`);
+}
+
 const continueIndex = read("extensions/cli/src/index.ts");
 for (const phrase of [
   '"--session-id <sessionId>"',
