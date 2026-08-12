@@ -1,0 +1,1 @@
+This marker exists only to bind the rebuilt SSH worker to the post-terminal-shell integration base and force exact-head review gates.
