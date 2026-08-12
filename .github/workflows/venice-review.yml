@@ -1,0 +1,78 @@
+name: Venice External Review
+
+on:
+  pull_request:
+    paths:
+      - "edge/termux/**"
+      - "scripts/venice_review.py"
+      - ".github/workflows/venice-review.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  venice-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Capture exact review range and acceptance
+        run: |
+          python - <<'PY'
+          import json, os, pathlib
+          event = json.loads(pathlib.Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          pr = event['pull_request']
+          pathlib.Path('/tmp/venice-acceptance.txt').write_text(pr.get('body') or '', encoding='utf-8')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as out:
+              out.write(f"VENICE_BASE={pr['base']['sha']}\n")
+              out.write(f"VENICE_HEAD={pr['head']['sha']}\n")
+          PY
+      - name: Verify exact Git objects exist
+        run: |
+          git cat-file -e "$VENICE_BASE^{commit}"
+          git cat-file -e "$VENICE_HEAD^{commit}"
+      - name: Install pinned Ollama
+        run: |
+          export OLLAMA_VERSION=0.30.8
+          curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start minimal local reviewer model
+        run: |
+          nohup ollama serve >/tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:11434/api/tags >/dev/null
+          ollama pull qwen2.5-coder:1.5b
+      - name: Venice reviews exact worker diff
+        run: |
+          python scripts/venice_review.py \
+            --repo . \
+            --base "$VENICE_BASE" \
+            --head "$VENICE_HEAD" \
+            --acceptance-file /tmp/venice-acceptance.txt \
+            --model qwen2.5-coder:1.5b \
+            --receipt /tmp/venice-review.json
+      - name: Publish receipt summary
+        if: always()
+        run: |
+          if [ -f /tmp/venice-review.json ]; then
+            cat /tmp/venice-review.json
+            echo '## Venice external review' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/venice-review.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Venice did not produce a receipt.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: venice-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: /tmp/venice-review.json
+          if-no-files-found: warn
