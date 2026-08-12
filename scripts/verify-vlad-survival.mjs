@@ -127,7 +127,8 @@ for (const phrase of [
 const adamDoctor = read("edge/termux/adam_doctor.py");
 for (const phrase of [
   "continue-continue.adam-doctor.v1",
-  '"vlad", "--json", "doctor", "--require", "continue"',
+  'env.get("ADAM_VLAD_BIN", "vlad")',
+  '[path, "--json", "doctor", "--require", "continue"]',
   '"UNKNOWN"',
   '"optional adviser; never required for Adam readiness"',
   "Adam does not contact Ollama or perform inference",
