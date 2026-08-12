@@ -12,6 +12,8 @@ mkdir -p "$BIN_DIR" "$ETC_DIR"
 install -m 0755 "$SOURCE_DIR/vlad_router.py" "$BIN_DIR/continue-continue-vlad-router"
 install -m 0755 "$SOURCE_DIR/vlad_edge.py" "$BIN_DIR/continue-continue-vlad-edge"
 install -m 0755 "$SOURCE_DIR/vlad_doctor.py" "$BIN_DIR/continue-continue-vlad-doctor"
+install -m 0755 "$SOURCE_DIR/vlad_continue_bootstrap.py" "$BIN_DIR/continue-continue-vlad-bootstrap"
+install -m 0755 "$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/continue-continue-vlad-cli"
 
 # Preserve local edits on reinstall. The shipped sheet is a default, not a remote authority.
 if [ ! -f "$ETC_DIR/routes.csv" ]; then
@@ -28,9 +30,18 @@ exec "$BIN_DIR/continue-continue-vlad-router" "\$@"
 EOF
 chmod 0755 "$BIN_DIR/continue-continue-vlad"
 
-# First-class human survival surface. It calls the machine entrypoint; it does
-# not replace routing, permissions, receipts, or Continue.
-install -m 0755 "$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/vlad"
+# First-class human survival surface. Bootstrap is deterministic and local;
+# every other command stays on the existing Python CLI and machine ingress.
+cat > "$BIN_DIR/vlad" <<EOF
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+if [ "\${1:-}" = "bootstrap" ]; then
+  shift
+  exec "$BIN_DIR/continue-continue-vlad-bootstrap" "\$@"
+fi
+exec "$BIN_DIR/continue-continue-vlad-cli" "\$@"
+EOF
+chmod 0755 "$BIN_DIR/vlad"
 
 cat <<EOF
 Installed human CLI:      $BIN_DIR/vlad
@@ -38,6 +49,7 @@ Installed machine ingress:$BIN_DIR/continue-continue-vlad
 Installed routing engine: $BIN_DIR/continue-continue-vlad-router
 Installed internal edge:  $BIN_DIR/continue-continue-vlad-edge
 Installed doctor:         $BIN_DIR/continue-continue-vlad-doctor
+Installed coder bootstrap:$BIN_DIR/continue-continue-vlad-bootstrap
 Routing sheet:            $ETC_DIR/routes.csv
 
 Safe defaults remain OFF:
@@ -50,6 +62,13 @@ Optional explicit organs:
   QWEN_BASE_URL=http://127.0.0.1:8091/v1
   QWEN_MODEL=Qwen3-1.7B-Q6_K
   VLAD_CN_BIN=cn
+  VLAD_OLLAMA_URL=http://127.0.0.1:11434
+  VLAD_OLLAMA_MODEL=<already-installed Ollama model>
+
+Minimum local coding path:
+  vlad bootstrap
+  vlad doctor --require continue
+  vlad code --auto "Make one bounded change and run its focused test"
 
 Human use:
   vlad
@@ -60,6 +79,8 @@ Human use:
 
 Coding remains explicitly gated by Vlad edge. To authorize local Continue work,
 VLAD_ALLOW_LOCAL_EXEC must be 1 and cn must remain allowed by VLAD_ALLOWED_BINS.
+`vlad bootstrap` never downloads a model and never overwrites a non-empty
+Continue config unless --force is explicit.
 
 Machine use:
   printf '%s\n' '{"request":"Open settings"}' | continue-continue-vlad route -
