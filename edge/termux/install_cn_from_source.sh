@@ -23,9 +23,9 @@ NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])')"
 printf '[cn-build] building exact fork on Vlad: %s\n' "$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || printf unknown)"
 printf '[cn-build] node=%s npm=%s\n' "$(node --version)" "$(npm --version)"
 
-# The upstream CLI build intentionally bundles its runtime into dist/index.js.
-# Avoid optional platform packages on Android; they are not required by build.mjs.
-export npm_config_optional=false
+# The CLI build intentionally bundles its runtime into dist/index.js. Keep npm
+# optional dependencies enabled: esbuild selects its platform package through
+# that mechanism, including Android/arm64 where available.
 export npm_config_audit=false
 export npm_config_fund=false
 
