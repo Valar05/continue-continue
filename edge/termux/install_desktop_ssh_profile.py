@@ -16,6 +16,7 @@ import sys
 import time
 
 ALIAS_RE = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
+USER_RE = re.compile(r"^[A-Za-z0-9._@+-]{1,128}$")
 
 
 def ssh_root(env: dict[str, str] | None = None) -> pathlib.Path:
@@ -30,9 +31,27 @@ def validate_alias(value: str) -> str:
     return alias
 
 
+def validate_user(value: str) -> str:
+    user = value.strip()
+    if user and not USER_RE.fullmatch(user):
+        raise ValueError("SSH user contains unsupported characters")
+    return user
+
+
+def validate_identity(value: str) -> str:
+    identity = value.strip()
+    if "\n" in identity or "\r" in identity:
+        raise ValueError("SSH identity path cannot contain newlines")
+    if '"' in identity:
+        raise ValueError("SSH identity path cannot contain double quotes")
+    return identity
+
+
 def render_profile(alias: str, host: str, user: str = "", port: int = 22, identity: str = "") -> str:
     alias = validate_alias(alias)
     host = host.strip()
+    user = validate_user(user)
+    identity = validate_identity(identity)
     if not host or any(char.isspace() for char in host):
         raise ValueError("desktop SSH host is required and cannot contain whitespace")
     if not (1 <= int(port) <= 65535):
@@ -46,11 +65,11 @@ def render_profile(alias: str, host: str, user: str = "", port: int = 22, identi
         "    ServerAliveCountMax 3",
         "    TCPKeepAlive yes",
     ]
-    if user.strip():
-        lines.append(f"    User {user.strip()}")
-    if identity.strip():
-        expanded = pathlib.Path(os.path.expanduser(identity.strip()))
-        lines.append(f"    IdentityFile {expanded}")
+    if user:
+        lines.append(f"    User {user}")
+    if identity:
+        expanded = pathlib.Path(os.path.expanduser(identity))
+        lines.append(f'    IdentityFile "{expanded}"')
         lines.append("    IdentitiesOnly yes")
     return "\n".join(lines) + "\n"
 
@@ -76,8 +95,10 @@ def install(alias: str, host: str, user: str = "", port: int = 22, identity: str
         pass
 
     alias = validate_alias(alias)
+    clean_user = validate_user(user)
+    clean_identity = validate_identity(identity)
     target = config_d / f"continue-continue-{alias}.conf"
-    text = render_profile(alias, host, user=user, port=port, identity=identity)
+    text = render_profile(alias, host, user=clean_user, port=port, identity=clean_identity)
     temp = target.with_suffix(".conf.tmp")
     temp.write_text(text, encoding="utf-8")
     try:
@@ -91,10 +112,10 @@ def install(alias: str, host: str, user: str = "", port: int = 22, identity: str
         "schema": "continue-continue.desktop-ssh-profile.v1",
         "createdAt": int(time.time() * 1000),
         "alias": alias,
-        "host": host,
-        "user": user or None,
+        "host": host.strip(),
+        "user": clean_user or None,
         "port": int(port),
-        "identityConfigured": bool(identity.strip()),
+        "identityConfigured": bool(clean_identity),
         "profile": str(target),
         "config": str(root / "config"),
         "command": f"ssh {alias}",
