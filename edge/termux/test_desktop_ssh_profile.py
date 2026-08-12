@@ -28,7 +28,7 @@ class DesktopSshProfileTests(unittest.TestCase):
         self.assertIn("HostName THECAULDRON", text)
         self.assertIn("User drew", text)
         self.assertIn("Port 2222", text)
-        self.assertIn("IdentityFile", text)
+        self.assertIn('IdentityFile "', text)
         self.assertIn("Include config.d/*", config)
         self.assertFalse(receipt["secretsStored"])
         self.assertEqual(receipt["command"], "ssh desktop")
@@ -49,6 +49,14 @@ class DesktopSshProfileTests(unittest.TestCase):
     def test_host_validation_blocks_whitespace_injection(self):
         with self.assertRaises(ValueError):
             ssh_profile.render_profile("desktop", "host name")
+
+    def test_user_validation_blocks_config_injection(self):
+        with self.assertRaises(ValueError):
+            ssh_profile.render_profile("desktop", "THECAULDRON", user="drew\nProxyCommand evil")
+
+    def test_identity_validation_blocks_config_injection(self):
+        with self.assertRaises(ValueError):
+            ssh_profile.render_profile("desktop", "THECAULDRON", identity="~/.ssh/key\nProxyCommand evil")
 
 
 if __name__ == "__main__":
