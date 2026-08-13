@@ -182,6 +182,33 @@ class JobStore(context: Context) : SQLiteOpenHelper(
         }
     }
 
+    fun resolveDispatched(jobId: String, state: JobState, detail: String): Boolean {
+        require(state in setOf(JobState.SUCCEEDED, JobState.FAILED, JobState.RECOVERABLE)) {
+            "Termux callback may only resolve to SUCCEEDED, FAILED, or RECOVERABLE"
+        }
+        writableDatabase.beginTransaction()
+        try {
+            val now = System.currentTimeMillis()
+            val values = ContentValues().apply {
+                put("state", state.name)
+                put("updated_at", now)
+                if (state in terminalStates) put("terminal_detail", detail.take(16_384))
+            }
+            val changed = writableDatabase.update(
+                "jobs",
+                values,
+                "job_id = ? AND state = ?",
+                arrayOf(jobId, JobState.DISPATCHED.name)
+            )
+            if (changed != 1) return false
+            appendEventLocked(jobId, state, detail.take(16_384), now)
+            writableDatabase.setTransactionSuccessful()
+            return true
+        } finally {
+            writableDatabase.endTransaction()
+        }
+    }
+
     fun recoverInterrupted(): Int {
         val now = System.currentTimeMillis()
         writableDatabase.beginTransaction()
