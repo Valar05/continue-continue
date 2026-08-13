@@ -1,0 +1,28 @@
+{
+  "schema": "continue-continue.vendored-review-tool.v1",
+  "tool": "Regnet QA CLI",
+  "sourceRepository": "Valar05/home-center",
+  "sourceCommit": "d3459986ea8950053cf7440af9a793cde6b5324c",
+  "files": [
+    {
+      "sourcePath": "regnet.sh",
+      "targetPath": "review-tools/regnet/regnet.sh",
+      "gitBlobSha": "7b56e92cb7244d5ed13e9af34929990f388b546d"
+    },
+    {
+      "sourcePath": "tools/renee.py",
+      "targetPath": "review-tools/regnet/tools/renee.py",
+      "gitBlobSha": "ec28db1925b688bfd8326558ae0c74d45059c0b3"
+    },
+    {
+      "sourcePath": "tools/test_renee_cli.py",
+      "targetPath": "review-tools/regnet/tools/test_renee_cli.py",
+      "gitBlobSha": "bfe6017dfde3c2e43c6d3ef99d14d199fca99b52"
+    },
+    {
+      "sourcePath": "config/renee_qa.v1.json",
+      "targetPath": "review-tools/regnet/config/renee_qa.v1.json",
+      "gitBlobSha": "0ee62ff25bcfa6eea86eb7c93406db1c3e0bb62b"
+    }
+  ]
+}
