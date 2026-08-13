@@ -47,7 +47,13 @@ class VladNotesTest(unittest.TestCase):
         self.assertEqual(first["receiptSha256"], second["previousReceiptSha256"])
 
     def test_same_idempotent_pack_bytes_have_verifiable_sidecar(self):
-        vlad_notes.compile_pack(None)
+        with mock.patch("vlad_notes.time.time", return_value=1000):
+            first = vlad_notes.compile_pack(None)
+        first_bytes = vlad_notes.pack_path().read_bytes()
+        with mock.patch("vlad_notes.time.time", return_value=2000):
+            second = vlad_notes.compile_pack(None)
+        self.assertEqual(first["packSha256"], second["packSha256"])
+        self.assertEqual(first_bytes, vlad_notes.pack_path().read_bytes())
         status = vlad_notes.status()
         self.assertTrue(status["ready"])
         vlad_notes.pack_path().write_text("{}")
