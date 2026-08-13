@@ -96,7 +96,7 @@ def compile_pack(root_arg: str | None) -> dict[str, Any]:
         total += size
     payload = {
         "schema": SCHEMA,
-        "generatedAt": int(time.time() * 1000),
+        "generatedAt": int(os.environ.get("SOURCE_DATE_EPOCH", "0")) * 1000,
         "root": str(root),
         "sourceCount": len(sources),
         "sourceBytes": total,
