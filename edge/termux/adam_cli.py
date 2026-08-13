@@ -73,6 +73,13 @@ def vlad_command() -> list[str]:
     return [os.environ.get("ADAM_VLAD_BIN", "vlad")]
 
 
+def codex_worker_command() -> list[str]:
+    override = os.environ.get("ADAM_CODEX_WORKER_BIN")
+    if override:
+        return [override]
+    return [sys.executable, str(here() / "codex_worker.py")]
+
+
 def write_shell_receipt(command: str, cwd: pathlib.Path, returncode: int) -> None:
     target = shell_receipt_path()
     temp = target.with_suffix(".json.tmp")
@@ -111,6 +118,20 @@ def change_directory(argument: str, cwd: pathlib.Path) -> pathlib.Path:
 
 def vlad(args: list[str]) -> int:
     return subprocess.run([*vlad_command(), *args], check=False).returncode
+
+
+def codex_worker(args: list[str], cwd: pathlib.Path) -> int:
+    command = codex_worker_command()
+    if not args:
+        return subprocess.run([*command, "doctor"], check=False).returncode
+    if args[0] == "doctor":
+        return subprocess.run([*command, *args], check=False).returncode
+    if args[0] == "resume":
+        if len(args) < 3:
+            print("adam codex resume requires THREAD_ID and PROMPT", file=sys.stderr)
+            return 2
+        return subprocess.run([*command, "resume", args[1], " ".join(args[2:]), "--cwd", str(cwd)], check=False).returncode
+    return subprocess.run([*command, "run", " ".join(args), "--cwd", str(cwd)], check=False).returncode
 
 
 def quote_command(args: list[str], cwd: pathlib.Path | None = None) -> int:
@@ -161,7 +182,7 @@ def quote_command(args: list[str], cwd: pathlib.Path | None = None) -> int:
 
 def repl() -> int:
     cwd = load_cwd()
-    print("Adam local. Deterministic shell. /cd, /pwd, /quote, !CMD, /shell CMD, /code, /review, /doctor, /vlad, /quit.")
+    print("Adam local. Deterministic shell. /cd, /pwd, /quote, !CMD, /shell CMD, /codex, /code, /review, /doctor, /vlad, /quit.")
     print(format_quote(select_quote(context_seed(cwd))))
     while True:
         try:
@@ -194,6 +215,9 @@ def repl() -> int:
             continue
         if text.startswith("/shell "):
             shell_command(text[7:].strip(), cwd)
+            continue
+        if text == "/codex" or text.startswith("/codex "):
+            codex_worker(shlex.split(text[6:].strip()), cwd)
             continue
         if text.startswith("/code "):
             vlad(["code", text[6:].strip()])
@@ -230,10 +254,12 @@ def main(argv: list[str] | None = None) -> int:
             print("adam shell requires a command", file=sys.stderr)
             return 2
         return shell_command(" ".join(argv[1:]), load_cwd())
+    if argv[0] == "codex":
+        return codex_worker(argv[1:], load_cwd())
     if argv[0] in {"code", "review", "status", "route", "phone", "observe", "home"}:
         return vlad(argv)
     if argv[0] in {"-h", "--help", "help"}:
-        print("usage: adam [quote [--seed TEXT] [--category bible|literature|history] [--json]|doctor|pwd|cd [DIR]|shell CMD|code PROMPT|review PROMPT|status|route ...|phone ...|observe|home]")
+        print("usage: adam [quote [--seed TEXT] [--category bible|literature|history] [--json]|doctor|pwd|cd [DIR]|shell CMD|codex [doctor|PROMPT|resume THREAD_ID PROMPT]|code PROMPT|review PROMPT|status|route ...|phone ...|observe|home]")
         print("bare adam opens the deterministic terminal; Adam itself performs no model inference")
         return 0
     print("[blocked] unknown Adam command; no model fallback is permitted", file=sys.stderr)
