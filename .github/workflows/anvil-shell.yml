@@ -12,6 +12,7 @@ on:
       - "edge/termux/test_vlad_notes.py"
       - "edge/termux/install.sh"
       - "docs/continue-continue/ANVIL_SHELL.md"
+      - "docs/reviews/anvil-shell-*.json"
       - ".github/workflows/anvil-shell.yml"
 
 permissions:
@@ -50,4 +51,58 @@ jobs:
         with:
           name: anvil-shell-debug-source-checkpoint
           path: edge/android-shell/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  regnet-qa:
+    needs: [deterministic-cli, android-source]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Home Center Regnet QA CLI
+        uses: actions/checkout@v4
+        with:
+          repository: Valar05/home-center
+          ref: d3459986ea8950053cf7440af9a793cde6b5324c
+          path: .review-tools/home-center
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify reviewer and issue deterministic QA receipt
+        env:
+          REGNET_HOME: ${{ runner.temp }}/regnet-qa
+          REGNET_OUTPUT: ${{ runner.temp }}/regnet-qa-output
+          REGNET_COMMIT: d3459986ea8950053cf7440af9a793cde6b5324c
+        run: |
+          test "$(git -C .review-tools/home-center rev-parse HEAD)" = "$REGNET_COMMIT"
+          (cd .review-tools/home-center && python -m unittest tools.test_renee_cli)
+          mkdir -p "$REGNET_HOME/evidence" "$REGNET_OUTPUT"
+          python - "$REGNET_HOME/evidence/source-checkpoint.json" <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          path = pathlib.Path(sys.argv[1])
+          evidence = {
+              "schema": "continue-continue.anvil-shell.source-evidence.v1",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "head": os.environ["GITHUB_SHA"],
+              "workflowRun": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              "upstreamJobs": ["deterministic-cli", "android-source"],
+              "capabilityState": "tested",
+              "stateBoundary": {
+                  "installedPhone": False,
+                  "callablePhone": False,
+                  "delivered": False,
+                  "accepted": False,
+              },
+          }
+          path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          .review-tools/home-center/regnet.sh --home "$REGNET_HOME" --json review             "Anvil Shell is repository-tested source at this exact workflow head; deterministic CLIs and Android unit/build checks pass without implying phone installation or callability."             --state tested             --acceptance "deterministic Python CLI compilation and unit tests pass"             --acceptance "Android unit tests and debug APK assembly pass"             --acceptance "Termux compatibility executable paths are absolute and adam.quote is dispatchable"             --acceptance "capability state remains below installed, callable, delivered, and accepted"             --evidence "$REGNET_HOME/evidence/source-checkpoint.json"             --evidence "docs/reviews/anvil-shell-venice-plan.json"             --evidence-ref "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"             --failure-path "pinned Home Center reviewer checkout or self-tests fail"             --failure-path "deterministic-cli or android-source dependency fails"             --failure-path "any claimed evidence file is missing"             --dissent "This receipt is SYNTHETIC_REGNET and cannot grant Venice stop permission."             --dissent "Repository-tested source is not phone runtime evidence."             --require-evidence | tee "$REGNET_OUTPUT/regnet-review-output.json"
+          cp "$REGNET_HOME"/receipts/*.json "$REGNET_OUTPUT/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anvil-shell-regnet-qa-receipt
+          path: ${{ runner.temp }}/regnet-qa-output/
           if-no-files-found: error
