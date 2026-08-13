@@ -6,6 +6,9 @@ on:
     paths:
       - "edge/android-shell/**"
       - "edge/termux/vlad_notes.py"
+      - "edge/termux/adam_cli.py"
+      - "edge/termux/adam_quotes.py"
+      - "edge/termux/test_adam_quotes.py"
       - "edge/termux/test_vlad_notes.py"
       - "edge/termux/install.sh"
       - "docs/continue-continue/ANVIL_SHELL.md"
@@ -22,10 +25,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile and test deterministic notes
+      - name: Compile and test deterministic CLIs
         run: |
-          python -m py_compile edge/termux/vlad_notes.py
-          python -m unittest edge.termux.test_vlad_notes
+          python -m py_compile edge/termux/vlad_notes.py edge/termux/adam_cli.py edge/termux/adam_quotes.py
+          python -m unittest discover -s edge/termux -p 'test_*.py'
 
   android-source:
     runs-on: ubuntu-latest
