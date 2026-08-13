@@ -11,6 +11,7 @@ Checkpoint 1 implements source only:
 - visible `[anvil][owner][team][state]` markers with screen-reader descriptions;
 - a model-free native self-check;
 - a typed registry for Adam, Vlad notes, sessions, anvils, explicit shell work, Hunger, Hyperbolic, and Hugging Face;
+- deterministic offline Adam quotations from source-carrying public-domain Scripture, literature, and history;
 - a narrowly scoped Termux `RUN_COMMAND` compatibility adapter;
 - pinned-revision, allow-pattern, SHA-256 requirements for Hugging Face assets.
 
@@ -29,3 +30,12 @@ gradle -p edge/android-shell :app:testDebugUnitTest :app:assembleDebug --no-daem
 ```
 
 Repository/CI builds are source evidence only. Acceptance requires the exact phone lane and a durable Home Center readback receipt.
+
+Human-facing quote check:
+
+```sh
+adam quote --category bible
+adam quote --seed 'anvil-shell|checkpoint-1' --json
+```
+
+A bare interactive `adam` prints one quote selected from the day, anvil, team, and working-directory seed. Explicit `--seed` makes the selection exactly replayable. Quote output is never injected into shell stdout, receipts, or machine commands.
