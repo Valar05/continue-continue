@@ -16,6 +16,8 @@ import subprocess
 import sys
 import time
 
+from adam_quotes import CATEGORIES, context_seed, format_quote, select_quote
+
 
 def here() -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parent
@@ -111,9 +113,56 @@ def vlad(args: list[str]) -> int:
     return subprocess.run([*vlad_command(), *args], check=False).returncode
 
 
+def quote_command(args: list[str], cwd: pathlib.Path | None = None) -> int:
+    category: str | None = None
+    seed: str | None = None
+    json_output = False
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token == "--json":
+            json_output = True
+            index += 1
+            continue
+        if token in {"--seed", "--category"}:
+            if index + 1 >= len(args):
+                print(f"adam quote {token} requires a value", file=sys.stderr)
+                return 2
+            value = args[index + 1]
+            if token == "--seed":
+                seed = value
+            else:
+                category = value
+            index += 2
+            continue
+        print(f"[blocked] unknown adam quote option: {token}", file=sys.stderr)
+        return 2
+    selected_seed = seed or context_seed(cwd)
+    try:
+        quote = select_quote(selected_seed, category)
+    except ValueError as exc:
+        print(f"[blocked] {exc}; categories: {', '.join(sorted(CATEGORIES))}", file=sys.stderr)
+        return 3
+    if json_output:
+        payload = quote.as_dict()
+        payload.update(
+            {
+                "schema": "continue-continue.adam-quote.v1",
+                "seed": selected_seed,
+                "deterministic": True,
+                "offline": True,
+            }
+        )
+        print(json.dumps(payload, sort_keys=True))
+    else:
+        print(format_quote(quote))
+    return 0
+
+
 def repl() -> int:
     cwd = load_cwd()
-    print("Adam local. Deterministic shell. /cd, /pwd, !CMD, /shell CMD, /code, /review, /doctor, /vlad, /quit.")
+    print("Adam local. Deterministic shell. /cd, /pwd, /quote, !CMD, /shell CMD, /code, /review, /doctor, /vlad, /quit.")
+    print(format_quote(select_quote(context_seed(cwd))))
     while True:
         try:
             line = input("adam> ")
@@ -126,6 +175,9 @@ def repl() -> int:
             return 0
         if text == "/doctor":
             subprocess.run(doctor_command(), check=False)
+            continue
+        if text == "/quote" or text.startswith("/quote "):
+            quote_command(shlex.split(text[6:].strip()), cwd)
             continue
         if text == "/pwd":
             print(cwd)
@@ -159,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv:
         return repl()
+    if argv[0] == "quote":
+        return quote_command(argv[1:], load_cwd())
     if argv[0] == "doctor":
         return subprocess.run([*doctor_command(), *argv[1:]], check=False).returncode
     if argv[0] == "pwd":
@@ -179,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv[0] in {"code", "review", "status", "route", "phone", "observe", "home"}:
         return vlad(argv)
     if argv[0] in {"-h", "--help", "help"}:
-        print("usage: adam [doctor|pwd|cd [DIR]|shell CMD|code PROMPT|review PROMPT|status|route ...|phone ...|observe|home]")
+        print("usage: adam [quote [--seed TEXT] [--category bible|literature|history] [--json]|doctor|pwd|cd [DIR]|shell CMD|code PROMPT|review PROMPT|status|route ...|phone ...|observe|home]")
         print("bare adam opens the deterministic terminal; Adam itself performs no model inference")
         return 0
     print("[blocked] unknown Adam command; no model fallback is permitted", file=sys.stderr)
