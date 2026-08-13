@@ -99,7 +99,24 @@ jobs:
           }
           path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
-          .review-tools/home-center/regnet.sh --home "$REGNET_HOME" --json review             "Anvil Shell is repository-tested source at this exact workflow head; deterministic CLIs and Android unit/build checks pass without implying phone installation or callability."             --state tested             --acceptance "deterministic Python CLI compilation and unit tests pass"             --acceptance "Android unit tests and debug APK assembly pass"             --acceptance "Termux compatibility executable paths are absolute and adam.quote is dispatchable"             --acceptance "RECOVERABLE external work is parked and never automatically replayed"             --acceptance "Vlad context pack bytes and hashes are stable across wall-clock drift"             --acceptance "capability state remains below installed, callable, delivered, and accepted"             --evidence "$REGNET_HOME/evidence/source-checkpoint.json"             --evidence "docs/reviews/anvil-shell-venice-plan.json"             --evidence-ref "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"             --failure-path "pinned Home Center reviewer checkout or self-tests fail"             --failure-path "deterministic-cli or android-source dependency fails"             --failure-path "any claimed evidence file is missing"             --dissent "This receipt is SYNTHETIC_REGNET and cannot grant Venice stop permission."             --dissent "Repository-tested source is not phone runtime evidence."             --require-evidence | tee "$REGNET_OUTPUT/regnet-review-output.json"
+          .review-tools/home-center/regnet.sh --home "$REGNET_HOME" --json review \
+            "Anvil Shell is repository-tested source at this exact workflow head; deterministic CLIs and Android unit/build checks pass without implying phone installation or callability." \
+            --state tested \
+            --acceptance "deterministic Python CLI compilation and unit tests pass" \
+            --acceptance "Android unit tests and debug APK assembly pass" \
+            --acceptance "Termux compatibility executable paths are absolute and adam.quote is dispatchable" \
+            --acceptance "RECOVERABLE external work is parked and never automatically replayed" \
+            --acceptance "Vlad context pack bytes and hashes are stable across wall-clock drift" \
+            --acceptance "capability state remains below installed, callable, delivered, and accepted" \
+            --evidence "$REGNET_HOME/evidence/source-checkpoint.json" \
+            --evidence "docs/reviews/anvil-shell-venice-plan.json" \
+            --evidence-ref "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --failure-path "pinned Home Center reviewer checkout or self-tests fail" \
+            --failure-path "deterministic-cli or android-source dependency fails" \
+            --failure-path "any claimed evidence file is missing" \
+            --dissent "This receipt is SYNTHETIC_REGNET and cannot grant Venice stop permission." \
+            --dissent "Repository-tested source is not phone runtime evidence." \
+            --require-evidence | tee "$REGNET_OUTPUT/regnet-review-output.json"
           cp "$REGNET_HOME"/receipts/*.json "$REGNET_OUTPUT/"
       - uses: actions/upload-artifact@v4
         with:
