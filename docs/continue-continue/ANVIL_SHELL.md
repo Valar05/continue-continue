@@ -104,8 +104,8 @@ Every import requires:
 | Requested | Yes |
 | Architecture researched | Yes |
 | Implemented source | Checkpoint 1 on `agent/anvil-shell-organism` |
-| Repository tested | Pending workflow |
-| APK artifact | Pending workflow; would not prove phone |
+| Repository tested | CI-gated per exact commit; the latest green source checkpoint before Regnet repair was `e0bb1a79041e7d7d001545d77cb5281714803875` in [run 31709121997](https://github.com/Valar05/continue-continue/actions/runs/31709121997) |
+| APK artifact | CI source-checkpoint artifact only; never phone proof |
 | Installed phone | No |
 | Callable phone | No |
 | Complete Termux replacement | No |
@@ -115,7 +115,7 @@ Every import requires:
 ## Next falsifiable checkpoint
 
 1. repository build and deterministic CLI/unit tests pass at exact head, including same-seed quote replay and category filtering;
-2. Termux prefix string and Android manifest contracts are verified;
+2. absolute Termux executable paths, Adam quote dispatch, and Android manifest contracts are verified;
 3. APK is built on `primary-phone` through the authorized phone build plane;
 4. APK installs with exact package/signer/hash receipt;
 5. queue a native self-check, kill the Activity, read `SUCCEEDED`;
