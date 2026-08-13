@@ -76,6 +76,13 @@ class CommandContractTest {
     }
 
     @Test
+    fun recoverableExternalWorkNeverAutoClaims() {
+        assertEquals(setOf(JobState.QUEUED), AUTO_CLAIMABLE_STATES)
+        assertFalse(JobState.DISPATCHED in AUTO_CLAIMABLE_STATES)
+        assertFalse(JobState.RECOVERABLE in AUTO_CLAIMABLE_STATES)
+    }
+
+    @Test
     fun explicitShellIsInteractionPlane() {
         val spec = CommandRegistry.resolve(request("shell.exec", listOf("git status")))
         assertEquals(CommandPlane.PHONE_INTERACTION, spec.plane)
