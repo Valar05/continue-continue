@@ -22,6 +22,7 @@ class TermuxCompatibilityAdapter(private val context: Context) {
         val args = when (job.request.verb) {
             "adam.doctor" -> arrayOf("doctor")
             "adam.status" -> arrayOf("status")
+            "adam.quote" -> arrayOf("quote", *job.request.args.toTypedArray())
             "vlad.notes.status" -> arrayOf("status")
             "vlad.notes.compile" -> arrayOf("compile", *job.request.args.toTypedArray())
             "vlad.notes.query" -> arrayOf("query", *job.request.args.toTypedArray())
@@ -36,7 +37,7 @@ class TermuxCompatibilityAdapter(private val context: Context) {
             putExtra(EXTRA_ARGUMENTS, args)
             putExtra(EXTRA_WORKDIR, job.request.cwd ?: TERMUX_HOME)
             putExtra(EXTRA_BACKGROUND, true)
-            putExtra(EXTRA_COMMAND_LABEL, "[${job.request.anvil}][${job.request.owner}] ${job.request.verb}")
+            putExtra(EXTRA_COMMAND_LABEL, "[${job.request.anvil}][${job.request.owner}][${job.request.team ?: "-"}] ${job.request.verb}")
             putExtra(EXTRA_COMMAND_DESCRIPTION, "Anvil Shell job ${job.jobId}; receipt remains pending.")
         }
         return try {
