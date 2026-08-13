@@ -67,6 +67,7 @@ jobs:
           REGNET_HOME: ${{ runner.temp }}/regnet-qa
           REGNET_OUTPUT: ${{ runner.temp }}/regnet-qa-output
           REGNET_SOURCE_COMMIT: d3459986ea8950053cf7440af9a793cde6b5324c
+          REVIEWED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           test "$(git hash-object review-tools/regnet/regnet.sh)" = "7b56e92cb7244d5ed13e9af34929990f388b546d"
           test "$(git hash-object review-tools/regnet/tools/renee.py)" = "ec28db1925b688bfd8326558ae0c74d45059c0b3"
@@ -84,7 +85,8 @@ jobs:
           evidence = {
               "schema": "continue-continue.anvil-shell.source-evidence.v1",
               "repository": os.environ["GITHUB_REPOSITORY"],
-              "head": os.environ["GITHUB_SHA"],
+              "head": os.environ["REVIEWED_HEAD"],
+              "testedMergeCommit": os.environ["GITHUB_SHA"],
               "workflowRun": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
               "upstreamJobs": ["deterministic-cli", "android-source"],
               "capabilityState": "tested",
