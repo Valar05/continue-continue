@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 
 data class DispatchOutcome(val state: JobState, val detail: String)
 
@@ -47,7 +48,7 @@ class TermuxCompatibilityAdapter(private val context: Context) {
             context.startService(intent)
             DispatchOutcome(
                 JobState.DISPATCHED,
-                "dispatched to Termux compatibility body; terminal result receiver is not implemented yet"
+                "dispatched to Termux compatibility body; terminal result pending"
             )
         } catch (error: SecurityException) {
             DispatchOutcome(JobState.BLOCKED, "Termux RUN_COMMAND permission or allow-external-apps is missing")
@@ -65,7 +66,8 @@ class TermuxCompatibilityAdapter(private val context: Context) {
             context,
             0,
             callback,
-            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_MUTABLE
+            PendingIntent.FLAG_ONE_SHOT or
+                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
         )
     }
 
