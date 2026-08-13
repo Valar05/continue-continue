@@ -126,13 +126,16 @@ class JobStore(context: Context) : SQLiteOpenHelper(
     }
 
     fun claimNext(): StoredJob? {
+        // RECOVERABLE is intentionally excluded. A dispatched external command may
+        // already have side effects, so only an explicit reconciliation operation
+        // may decide whether it is safe to retry.
         writableDatabase.beginTransaction()
         try {
             val job = readableDatabase.query(
                 "jobs",
                 null,
-                "state IN (?, ?)",
-                arrayOf(JobState.QUEUED.name, JobState.RECOVERABLE.name),
+                "state = ?",
+                arrayOf(JobState.QUEUED.name),
                 null,
                 null,
                 "created_at ASC",
@@ -146,8 +149,8 @@ class JobStore(context: Context) : SQLiteOpenHelper(
                     put("state", JobState.CLAIMED.name)
                     put("updated_at", System.currentTimeMillis())
                 },
-                "job_id = ? AND state IN (?, ?)",
-                arrayOf(job.jobId, JobState.QUEUED.name, JobState.RECOVERABLE.name)
+                "job_id = ? AND state = ?",
+                arrayOf(job.jobId, JobState.QUEUED.name)
             )
             if (changed != 1) return null
             appendEventLocked(job.jobId, JobState.CLAIMED, "claimed by :engine")
@@ -191,8 +194,8 @@ class JobStore(context: Context) : SQLiteOpenHelper(
                 writableDatabase.execSQL(
                     """INSERT INTO events(job_id, state, detail, created_at)
                        SELECT job_id, ?, 'engine restarted; prior execution requires reconciliation', ?
-                       FROM jobs WHERE state = ?""",
-                    arrayOf(JobState.RECOVERABLE.name, now, JobState.RECOVERABLE.name)
+                       FROM jobs WHERE state = ? AND updated_at = ?""",
+                    arrayOf(JobState.RECOVERABLE.name, now, JobState.RECOVERABLE.name, now)
                 )
             }
             writableDatabase.setTransactionSuccessful()
