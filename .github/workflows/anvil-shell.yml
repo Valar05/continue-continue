@@ -13,6 +13,7 @@ on:
       - "edge/termux/install.sh"
       - "docs/continue-continue/ANVIL_SHELL.md"
       - "docs/reviews/anvil-shell-*.json"
+      - "review-tools/regnet/**"
       - ".github/workflows/anvil-shell.yml"
 
 permissions:
@@ -58,12 +59,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch pinned Home Center Regnet QA CLI
-        uses: actions/checkout@v4
-        with:
-          repository: Valar05/home-center
-          ref: d3459986ea8950053cf7440af9a793cde6b5324c
-          path: .review-tools/home-center
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -71,10 +66,13 @@ jobs:
         env:
           REGNET_HOME: ${{ runner.temp }}/regnet-qa
           REGNET_OUTPUT: ${{ runner.temp }}/regnet-qa-output
-          REGNET_COMMIT: d3459986ea8950053cf7440af9a793cde6b5324c
+          REGNET_SOURCE_COMMIT: d3459986ea8950053cf7440af9a793cde6b5324c
         run: |
-          test "$(git -C .review-tools/home-center rev-parse HEAD)" = "$REGNET_COMMIT"
-          (cd .review-tools/home-center && python -m unittest tools.test_renee_cli)
+          test "$(git hash-object review-tools/regnet/regnet.sh)" = "7b56e92cb7244d5ed13e9af34929990f388b546d"
+          test "$(git hash-object review-tools/regnet/tools/renee.py)" = "ec28db1925b688bfd8326558ae0c74d45059c0b3"
+          test "$(git hash-object review-tools/regnet/tools/test_renee_cli.py)" = "bfe6017dfde3c2e43c6d3ef99d14d199fca99b52"
+          test "$(git hash-object review-tools/regnet/config/renee_qa.v1.json)" = "0ee62ff25bcfa6eea86eb7c93406db1c3e0bb62b"
+          python review-tools/regnet/tools/test_renee_cli.py
           mkdir -p "$REGNET_HOME/evidence" "$REGNET_OUTPUT"
           python - "$REGNET_HOME/evidence/source-checkpoint.json" <<'PY'
           import json
@@ -99,7 +97,7 @@ jobs:
           }
           path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
-          .review-tools/home-center/regnet.sh --home "$REGNET_HOME" --json review \
+          review-tools/regnet/regnet.sh --home "$REGNET_HOME" --json review \
             "Anvil Shell is repository-tested source at this exact workflow head; deterministic CLIs and Android unit/build checks pass without implying phone installation or callability." \
             --state tested \
             --acceptance "deterministic Python CLI compilation and unit tests pass" \
@@ -111,7 +109,7 @@ jobs:
             --evidence "$REGNET_HOME/evidence/source-checkpoint.json" \
             --evidence "docs/reviews/anvil-shell-venice-plan.json" \
             --evidence-ref "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-            --failure-path "pinned Home Center reviewer checkout or self-tests fail" \
+            --failure-path "vendored canonical reviewer hash verification or self-tests fail" \
             --failure-path "deterministic-cli or android-source dependency fails" \
             --failure-path "any claimed evidence file is missing" \
             --dissent "This receipt is SYNTHETIC_REGNET and cannot grant Venice stop permission." \
