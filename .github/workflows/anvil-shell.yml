@@ -1,0 +1,126 @@
+name: Anvil Shell
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "edge/android-shell/**"
+      - "edge/termux/vlad_notes.py"
+      - "edge/termux/adam_cli.py"
+      - "edge/termux/adam_quotes.py"
+      - "edge/termux/test_adam_quotes.py"
+      - "edge/termux/test_vlad_notes.py"
+      - "edge/termux/install.sh"
+      - "docs/continue-continue/ANVIL_SHELL.md"
+      - "docs/reviews/anvil-shell-*.json"
+      - "review-tools/regnet/**"
+      - ".github/workflows/anvil-shell.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and test deterministic CLIs
+        run: |
+          python -m py_compile edge/termux/vlad_notes.py edge/termux/adam_cli.py edge/termux/adam_quotes.py
+          python -m unittest discover -s edge/termux -p 'test_*.py'
+
+  android-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install pinned Android SDK pieces
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+      - name: Test and assemble checkpoint APK
+        run: gradle -p edge/android-shell :app:testDebugUnitTest :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anvil-shell-debug-source-checkpoint
+          path: edge/android-shell/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  regnet-qa:
+    needs: [deterministic-cli, android-source]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify reviewer and issue deterministic QA receipt
+        env:
+          REGNET_HOME: ${{ runner.temp }}/regnet-qa
+          REGNET_OUTPUT: ${{ runner.temp }}/regnet-qa-output
+          REGNET_SOURCE_COMMIT: d3459986ea8950053cf7440af9a793cde6b5324c
+          REVIEWED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -o pipefail
+          test "$(git hash-object review-tools/regnet/regnet.sh)" = "7b56e92cb7244d5ed13e9af34929990f388b546d"
+          test "$(git hash-object review-tools/regnet/tools/renee.py)" = "ec28db1925b688bfd8326558ae0c74d45059c0b3"
+          test "$(git hash-object review-tools/regnet/tools/test_renee_cli.py)" = "bfe6017dfde3c2e43c6d3ef99d14d199fca99b52"
+          test "$(git hash-object review-tools/regnet/config/renee_qa.v1.json)" = "0ee62ff25bcfa6eea86eb7c93406db1c3e0bb62b"
+          python review-tools/regnet/tools/test_renee_cli.py
+          mkdir -p "$REGNET_HOME/evidence" "$REGNET_OUTPUT"
+          python - "$REGNET_HOME/evidence/source-checkpoint.json" <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          path = pathlib.Path(sys.argv[1])
+          evidence = {
+              "schema": "continue-continue.anvil-shell.source-evidence.v1",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "head": os.environ["REVIEWED_HEAD"],
+              "testedMergeCommit": os.environ["GITHUB_SHA"],
+              "workflowRun": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              "upstreamJobs": ["deterministic-cli", "android-source"],
+              "capabilityState": "tested",
+              "stateBoundary": {
+                  "installedPhone": False,
+                  "callablePhone": False,
+                  "delivered": False,
+                  "accepted": False,
+              },
+          }
+          path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          sh review-tools/regnet/regnet.sh --home "$REGNET_HOME" --json review \
+            "Anvil Shell is repository-tested source at this exact workflow head; deterministic CLIs and Android unit/build checks pass without implying phone installation or callability." \
+            --state tested \
+            --acceptance "deterministic Python CLI compilation and unit tests pass" \
+            --acceptance "Android unit tests and debug APK assembly pass" \
+            --acceptance "Termux compatibility executable paths are absolute and adam.quote is dispatchable" \
+            --acceptance "RECOVERABLE external work is parked and never automatically replayed" \
+            --acceptance "Vlad context pack bytes and hashes are stable across wall-clock drift" \
+            --acceptance "capability state remains below installed, callable, delivered, and accepted" \
+            --evidence "$REGNET_HOME/evidence/source-checkpoint.json" \
+            --evidence "docs/reviews/anvil-shell-venice-plan.json" \
+            --evidence-ref "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --failure-path "vendored canonical reviewer hash verification or self-tests fail" \
+            --failure-path "deterministic-cli or android-source dependency fails" \
+            --failure-path "any claimed evidence file is missing" \
+            --dissent "This receipt is SYNTHETIC_REGNET and cannot grant Venice stop permission." \
+            --dissent "Repository-tested source is not phone runtime evidence." \
+            --require-evidence | tee "$REGNET_OUTPUT/regnet-review-output.json"
+          cp "$REGNET_HOME"/receipts/*.json "$REGNET_OUTPUT/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anvil-shell-regnet-qa-receipt
+          path: ${{ runner.temp }}/regnet-qa-output/
+          if-no-files-found: error

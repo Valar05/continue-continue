@@ -14,8 +14,11 @@ install -m 0755 "$SOURCE_DIR/vlad_edge.py" "$BIN_DIR/continue-continue-vlad-edge
 install -m 0755 "$SOURCE_DIR/vlad_doctor.py" "$BIN_DIR/continue-continue-vlad-doctor"
 install -m 0755 "$SOURCE_DIR/vlad_continue_bootstrap.py" "$BIN_DIR/continue-continue-vlad-bootstrap"
 install -m 0755 "$SOURCE_DIR/vlad_cli.py" "$BIN_DIR/continue-continue-vlad-cli"
+install -m 0755 "$SOURCE_DIR/vlad_notes.py" "$BIN_DIR/vlad-notes"
 install -m 0755 "$SOURCE_DIR/adam_doctor.py" "$BIN_DIR/continue-continue-adam-doctor"
 install -m 0755 "$SOURCE_DIR/adam_cli.py" "$BIN_DIR/continue-continue-adam-cli"
+install -m 0755 "$SOURCE_DIR/codex_worker.py" "$BIN_DIR/continue-continue-codex-worker"
+install -m 0644 "$SOURCE_DIR/adam_quotes.py" "$BIN_DIR/adam_quotes.py"
 
 # Preserve local edits on reinstall. The shipped sheet is a default, not a remote authority.
 if [ ! -f "$ETC_DIR/routes.csv" ]; then
@@ -52,6 +55,7 @@ set -euo pipefail
 export ADAM_BIN="\${ADAM_BIN:-$BIN_DIR/adam}"
 export ADAM_DOCTOR_BIN="\${ADAM_DOCTOR_BIN:-$BIN_DIR/continue-continue-adam-doctor}"
 export ADAM_VLAD_BIN="\${ADAM_VLAD_BIN:-$BIN_DIR/vlad}"
+export ADAM_CODEX_WORKER_BIN="\${ADAM_CODEX_WORKER_BIN:-$BIN_DIR/continue-continue-codex-worker}"
 exec "$BIN_DIR/continue-continue-adam-cli" "\$@"
 EOF
 chmod 0755 "$BIN_DIR/adam"
@@ -61,6 +65,9 @@ Installed human daemon:   $BIN_DIR/adam
 Installed Adam doctor:    $BIN_DIR/continue-continue-adam-doctor
 Installed Vlad helper:    $BIN_DIR/vlad
 Installed machine ingress:$BIN_DIR/continue-continue-vlad
+Installed notes CLI:      $BIN_DIR/vlad-notes
+Installed quote corpus:   $BIN_DIR/adam_quotes.py
+Installed Codex worker:   $BIN_DIR/continue-continue-codex-worker
 Installed routing engine: $BIN_DIR/continue-continue-vlad-router
 Installed internal edge:  $BIN_DIR/continue-continue-vlad-edge
 Installed Vlad doctor:    $BIN_DIR/continue-continue-vlad-doctor
@@ -81,7 +88,12 @@ First bounded proof:
 
 Human use:
   adam
+  adam quote --category bible
+  adam quote --seed 'anvil-shell|checkpoint-1' --json
   adam shell 'git status'
+  adam codex doctor
+  adam codex 'Inspect this project and return one bounded next action'
+  adam codex resume THREAD_ID 'Continue the same bounded task'
   adam code 'Make one bounded change and run its focused test'
   adam review 'Review the current diff'
 

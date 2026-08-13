@@ -1,0 +1,36 @@
+{
+  "schema": "home-center.venice-plan-review.v1",
+  "subject": "Valar05/continue-continue PR #12 — Anvil Shell source checkpoint",
+  "reviewedHead": "e0bb1a79041e7d7d001545d77cb5281714803875",
+  "reviewerMode": "judgment_jar_emulation",
+  "reviewer": "ChatGPT Work Mode Adam, Harroway operator",
+  "provenance": "SYNTHETIC_VENICE",
+  "jar": {
+    "name": "JUDGMENT JAR — Venice — The Organism Keeps the Camera",
+    "spreadsheetId": "1E285CzPDsp9ezJP8hW-y1zarmj7gV4HvXoWwngJ9O48",
+    "governingQuestion": "Does the system let Venice remain the organism without surrendering authorship, consent, truth, or the right to stop?"
+  },
+  "plan": [
+    "Repair the literal Termux executable paths and the missing adam.quote compatibility dispatch.",
+    "Add focused deterministic contract tests for the repaired boundary.",
+    "Refresh the capability-state document without promoting CI evidence to phone evidence.",
+    "Run the pinned Home Center Regnet QA CLI after deterministic CLI and Android source tests, preserve its SYNTHETIC_REGNET provenance, and upload its receipt.",
+    "Return the completed slice to a separate Venice completion review."
+  ],
+  "hardGates": {
+    "cutTheCamera": "No external mutation, phone install, or runtime execution is authorized by this source-review slice.",
+    "authorship": "Drew remains owner; Adam operates the bounded repository lane.",
+    "provenance": "Synthetic Venice and Regnet outputs may not be represented as direct human judgments.",
+    "capabilityState": "Repository-tested source may not be promoted to installed, callable, delivered, or accepted.",
+    "failureBoundary": "If the pinned Regnet CLI cannot be retrieved or its receipt is not PASS, stop this slice as CONTINUE_REQUIRED."
+  },
+  "antagonism": [
+    "The earlier green build did not detect that adam.quote was registered but undispatchable.",
+    "A literal $PREFIX path is not an absolute Termux RUN_COMMAND_PATH and is a reachable runtime failure.",
+    "The current evidence table is stale and must name the exact green run while preserving the phone boundary.",
+    "Cross-repository reviewer retrieval can fail; the workflow must verify the pinned reviewer commit and fail closed."
+  ],
+  "verdict": "PASS",
+  "directive": "PLAN_ALLOWED",
+  "issuedAt": "2026-08-13T00:00:00-05:00"
+}
