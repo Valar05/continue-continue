@@ -20,6 +20,8 @@ enum class JobState {
     CANCELLED
 }
 
+internal val AUTO_CLAIMABLE_STATES = setOf(JobState.QUEUED)
+
 data class StoredJob(
     val jobId: String,
     val requestHash: String,
@@ -129,13 +131,16 @@ class JobStore(context: Context) : SQLiteOpenHelper(
         // RECOVERABLE is intentionally excluded. A dispatched external command may
         // already have side effects, so only an explicit reconciliation operation
         // may decide whether it is safe to retry.
+        val claimableNames = AUTO_CLAIMABLE_STATES.map(JobState::name)
+        check(claimableNames.isNotEmpty())
+        val placeholders = claimableNames.joinToString(",") { "?" }
         writableDatabase.beginTransaction()
         try {
             val job = readableDatabase.query(
                 "jobs",
                 null,
-                "state = ?",
-                arrayOf(JobState.QUEUED.name),
+                "state IN ($placeholders)",
+                claimableNames.toTypedArray(),
                 null,
                 null,
                 "created_at ASC",
@@ -149,8 +154,8 @@ class JobStore(context: Context) : SQLiteOpenHelper(
                     put("state", JobState.CLAIMED.name)
                     put("updated_at", System.currentTimeMillis())
                 },
-                "job_id = ? AND state = ?",
-                arrayOf(job.jobId, JobState.QUEUED.name)
+                "job_id = ? AND state IN ($placeholders)",
+                arrayOf(job.jobId, *claimableNames.toTypedArray())
             )
             if (changed != 1) return null
             appendEventLocked(job.jobId, JobState.CLAIMED, "claimed by :engine")
