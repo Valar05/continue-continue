@@ -63,13 +63,15 @@ The registry includes:
 - `status`, `doctor`;
 - `session.list/open/checkpoint/resume/stop`;
 - `anvil.select/stream`;
-- `adam.doctor/status`;
+- `adam.doctor/status/quote`;
 - `vlad.notes.status/compile/query/next/receipt`;
 - explicit `shell.exec`;
 - `hunger.invoke`, `hyperbolic.invoke`;
 - `hf.status/import/verify/bench`.
 
 Unknown free text blocks. It never becomes shell or model input by convenience.
+
+`adam quote` is a model-free offline organ with three corpus categories: `bible`, `literature`, and `history`. Selection is SHA-256-derived from an explicit seed or from day + anvil + team + working directory. The same seed and category always produce the same record. Human interactive startup may print a quotation; machine commands and receipts never receive unsolicited prose. Each record carries an attribution, work/reference, and source URL. The initial corpus uses public-domain KJV Scripture and public-domain literary/historical texts.
 
 The new stdlib-only `vlad-notes` executable finally implements the previously promised five verbs. It scans only the approved project root and allowlisted doctrine paths, rejects symlinks and suspicious names, redacts likely secret assignments, writes an atomic hashed context pack, performs deterministic text lookup, extracts explicit gates/actions, and appends hash-chained decision receipts.
 
@@ -112,7 +114,7 @@ Every import requires:
 
 ## Next falsifiable checkpoint
 
-1. repository build and unit tests pass at exact head;
+1. repository build and deterministic CLI/unit tests pass at exact head, including same-seed quote replay and category filtering;
 2. Termux prefix string and Android manifest contracts are verified;
 3. APK is built on `primary-phone` through the authorized phone build plane;
 4. APK installs with exact package/signer/hash receipt;
