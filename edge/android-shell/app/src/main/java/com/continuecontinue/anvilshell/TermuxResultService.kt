@@ -55,7 +55,7 @@ class TermuxResultService : Service() {
             is String -> value.toLongOrNull()
             else -> null
         }
-        return maxOf(captured.length.toLong(), parsed ?: captured.length.toLong())
+        return parsed ?: captured.length.toLong()
     }
 
     companion object {
