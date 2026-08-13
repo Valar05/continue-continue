@@ -1,8 +1,10 @@
 package com.continuecontinue.anvilshell
 
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 
 data class DispatchOutcome(val state: JobState, val detail: String)
 
@@ -37,6 +39,7 @@ class TermuxCompatibilityAdapter(private val context: Context) {
             putExtra(EXTRA_ARGUMENTS, args)
             putExtra(EXTRA_WORKDIR, job.request.cwd ?: TERMUX_HOME)
             putExtra(EXTRA_BACKGROUND, true)
+            putExtra(EXTRA_PENDING_INTENT, resultPendingIntent(job.jobId))
             putExtra(EXTRA_COMMAND_LABEL, "[${job.request.anvil}][${job.request.owner}][${job.request.team ?: "-"}] ${job.request.verb}")
             putExtra(EXTRA_COMMAND_DESCRIPTION, "Anvil Shell job ${job.jobId}; receipt remains pending.")
         }
@@ -53,6 +56,19 @@ class TermuxCompatibilityAdapter(private val context: Context) {
         }
     }
 
+    private fun resultPendingIntent(jobId: String): PendingIntent {
+        val callback = Intent(context, TermuxResultService::class.java).apply {
+            data = Uri.parse("anvil://termux-result/" + Uri.encode(jobId))
+            putExtra(TermuxResultService.EXTRA_JOB_ID, jobId)
+        }
+        return PendingIntent.getService(
+            context,
+            0,
+            callback,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_MUTABLE
+        )
+    }
+
     companion object {
         private const val TERMUX_PACKAGE = "com.termux"
         private const val RUN_COMMAND_SERVICE = "com.termux.app.RunCommandService"
@@ -61,6 +77,7 @@ class TermuxCompatibilityAdapter(private val context: Context) {
         private const val EXTRA_ARGUMENTS = "com.termux.RUN_COMMAND_ARGUMENTS"
         private const val EXTRA_WORKDIR = "com.termux.RUN_COMMAND_WORKDIR"
         private const val EXTRA_BACKGROUND = "com.termux.RUN_COMMAND_BACKGROUND"
+        private const val EXTRA_PENDING_INTENT = "com.termux.RUN_COMMAND_PENDING_INTENT"
         private const val EXTRA_COMMAND_LABEL = "com.termux.RUN_COMMAND_LABEL"
         private const val EXTRA_COMMAND_DESCRIPTION = "com.termux.RUN_COMMAND_DESCRIPTION"
         private const val TERMUX_HOME = "/data/data/com.termux/files/home"
