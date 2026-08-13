@@ -54,6 +54,7 @@ data class CommandRequest(
 }
 
 object CommandRegistry {
+    private const val TERMUX_PREFIX = "/data/data/com.termux/files/usr"
     private val safeId = Regex("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
     private val forbiddenText = Regex("[\\u0000\\r\\n]")
 
@@ -67,15 +68,15 @@ object CommandRegistry {
         CommandSpec("session.stop", CommandPlane.PHONE_INTERACTION, CommandRoute.NATIVE, minArgs = 1, maxArgs = 2),
         CommandSpec("anvil.select", CommandPlane.PHONE_INTERACTION, CommandRoute.NATIVE, minArgs = 1, maxArgs = 1),
         CommandSpec("anvil.stream", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.NATIVE, minArgs = 0, maxArgs = 1),
-        CommandSpec("adam.doctor", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "\$PREFIX/local/bin/adam", maxArgs = 0),
-        CommandSpec("adam.status", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "\$PREFIX/local/bin/adam", maxArgs = 0),
-        CommandSpec("adam.quote", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "\$PREFIX/local/bin/adam", maxArgs = 4),
-        CommandSpec("vlad.notes.status", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "\$PREFIX/local/bin/vlad-notes", maxArgs = 0),
-        CommandSpec("vlad.notes.compile", CommandPlane.PHONE_MAINTENANCE, CommandRoute.TERMUX_COMPAT, executable = "\$PREFIX/local/bin/vlad-notes", maxArgs = 2),
-        CommandSpec("vlad.notes.query", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "\$PREFIX/local/bin/vlad-notes", minArgs = 1, maxArgs = 8),
-        CommandSpec("vlad.notes.next", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "\$PREFIX/local/bin/vlad-notes", maxArgs = 1),
-        CommandSpec("vlad.notes.receipt", CommandPlane.PHONE_MAINTENANCE, CommandRoute.TERMUX_COMPAT, executable = "\$PREFIX/local/bin/vlad-notes", minArgs = 1, maxArgs = 8),
-        CommandSpec("shell.exec", CommandPlane.PHONE_INTERACTION, CommandRoute.TERMUX_COMPAT, executable = "\$PREFIX/bin/sh", minArgs = 1, maxArgs = 1),
+        CommandSpec("adam.doctor", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "$TERMUX_PREFIX/local/bin/adam", maxArgs = 0),
+        CommandSpec("adam.status", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "$TERMUX_PREFIX/local/bin/adam", maxArgs = 0),
+        CommandSpec("adam.quote", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "$TERMUX_PREFIX/local/bin/adam", maxArgs = 4),
+        CommandSpec("vlad.notes.status", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "$TERMUX_PREFIX/local/bin/vlad-notes", maxArgs = 0),
+        CommandSpec("vlad.notes.compile", CommandPlane.PHONE_MAINTENANCE, CommandRoute.TERMUX_COMPAT, executable = "$TERMUX_PREFIX/local/bin/vlad-notes", maxArgs = 2),
+        CommandSpec("vlad.notes.query", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "$TERMUX_PREFIX/local/bin/vlad-notes", minArgs = 1, maxArgs = 8),
+        CommandSpec("vlad.notes.next", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.TERMUX_COMPAT, executable = "$TERMUX_PREFIX/local/bin/vlad-notes", maxArgs = 1),
+        CommandSpec("vlad.notes.receipt", CommandPlane.PHONE_MAINTENANCE, CommandRoute.TERMUX_COMPAT, executable = "$TERMUX_PREFIX/local/bin/vlad-notes", minArgs = 1, maxArgs = 8),
+        CommandSpec("shell.exec", CommandPlane.PHONE_INTERACTION, CommandRoute.TERMUX_COMPAT, executable = "$TERMUX_PREFIX/bin/sh", minArgs = 1, maxArgs = 1),
         CommandSpec("hunger.invoke", CommandPlane.JUDGMENT, CommandRoute.HOME_CENTER, minArgs = 1, maxArgs = 4, networkOptional = false),
         CommandSpec("hyperbolic.invoke", CommandPlane.JUDGMENT, CommandRoute.HOME_CENTER, minArgs = 1, maxArgs = 4, networkOptional = false),
         CommandSpec("hf.status", CommandPlane.PHONE_DIAGNOSTICS_READONLY, CommandRoute.NATIVE),
