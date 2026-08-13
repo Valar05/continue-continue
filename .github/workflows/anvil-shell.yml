@@ -69,6 +69,7 @@ jobs:
           REGNET_SOURCE_COMMIT: d3459986ea8950053cf7440af9a793cde6b5324c
           REVIEWED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          set -o pipefail
           test "$(git hash-object review-tools/regnet/regnet.sh)" = "7b56e92cb7244d5ed13e9af34929990f388b546d"
           test "$(git hash-object review-tools/regnet/tools/renee.py)" = "ec28db1925b688bfd8326558ae0c74d45059c0b3"
           test "$(git hash-object review-tools/regnet/tools/test_renee_cli.py)" = "bfe6017dfde3c2e43c6d3ef99d14d199fca99b52"
@@ -99,7 +100,7 @@ jobs:
           }
           path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
-          review-tools/regnet/regnet.sh --home "$REGNET_HOME" --json review \
+          sh review-tools/regnet/regnet.sh --home "$REGNET_HOME" --json review \
             "Anvil Shell is repository-tested source at this exact workflow head; deterministic CLIs and Android unit/build checks pass without implying phone installation or callability." \
             --state tested \
             --acceptance "deterministic Python CLI compilation and unit tests pass" \
