@@ -88,4 +88,49 @@ class CommandContractTest {
         assertEquals(CommandPlane.PHONE_INTERACTION, spec.plane)
         assertEquals(CommandRoute.TERMUX_COMPAT, spec.route)
     }
+    @Test
+    fun termuxSuccessReceiptIsDeterministicAndSourceCarrying() {
+        val input = TermuxTerminalInput(
+            jobId = "job-42",
+            stdout = "load-bearing output",
+            stderr = "",
+            stdoutOriginalLength = 19,
+            stderrOriginalLength = 0,
+            exitCode = 0,
+            errCode = TermuxResultContract.NO_INTERNAL_ERROR,
+            errorMessage = ""
+        )
+        val first = TermuxResultContract.evaluate(input)
+        val second = TermuxResultContract.evaluate(input)
+        assertEquals(JobState.SUCCEEDED, first.state)
+        assertEquals(first, second)
+        assertTrue(first.receipt.contains("\"schema\":\"anvil.shell.termux-result.v1\""))
+        assertTrue(first.receipt.contains("\"stdoutSha256\""))
+        assertTrue(first.receipt.contains("\"stdoutTruncated\":false"))
+    }
+
+    @Test
+    fun termuxNonZeroOrInternalErrorFailsClosed() {
+        val nonZero = TermuxResultContract.evaluate(
+            TermuxTerminalInput("job-exit", "", "bad", 0, 3, 7, -1, "")
+        )
+        val internal = TermuxResultContract.evaluate(
+            TermuxTerminalInput("job-err", "", "", 0, 0, 0, 5, "Termux error")
+        )
+        assertEquals(JobState.FAILED, nonZero.state)
+        assertEquals(JobState.FAILED, internal.state)
+    }
+
+    @Test
+    fun termuxReceiptMarksProviderTruncationAndBoundsItsTail() {
+        val captured = "x".repeat(12_000)
+        val outcome = TermuxResultContract.evaluate(
+            TermuxTerminalInput("job-large", captured, "", 20_000, 0, 0, -1, "")
+        )
+        assertTrue(outcome.receipt.contains("\"stdoutCapturedLength\":12000"))
+        assertTrue(outcome.receipt.contains("\"stdoutOriginalLength\":20000"))
+        assertTrue(outcome.receipt.contains("\"stdoutTruncated\":true"))
+        assertFalse(outcome.receipt.contains(captured))
+    }
+
 }
