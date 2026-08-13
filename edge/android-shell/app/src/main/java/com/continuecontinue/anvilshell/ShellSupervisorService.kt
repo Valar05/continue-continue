@@ -76,8 +76,18 @@ class ShellSupervisorService : Service() {
         when (spec.route) {
             CommandRoute.NATIVE -> executeNative(job)
             CommandRoute.TERMUX_COMPAT -> {
+                // Persist ownership before crossing the process boundary. A fast
+                // PendingIntent callback may otherwise be overwritten by a late
+                // DISPATCHED write from this process.
+                store.transition(
+                    job.jobId,
+                    JobState.DISPATCHED,
+                    "prepared Termux compatibility dispatch; terminal result pending"
+                )
                 val outcome = TermuxCompatibilityAdapter(this).dispatch(job, spec)
-                store.transition(job.jobId, outcome.state, outcome.detail)
+                if (outcome.state != JobState.DISPATCHED) {
+                    store.transition(job.jobId, outcome.state, outcome.detail)
+                }
             }
             CommandRoute.HOME_CENTER -> store.transition(
                 job.jobId,
