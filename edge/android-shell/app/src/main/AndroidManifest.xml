@@ -24,6 +24,12 @@
         </activity>
 
         <service
+            android:name=".TermuxResultService"
+            android:exported="false"
+            android:process=":engine"
+            android:stopWithTask="false" />
+
+        <service
             android:name=".ShellSupervisorService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
